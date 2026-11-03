@@ -34,6 +34,9 @@ class Settings(BaseSettings):
         "postgresql+psycopg://invoice_user:invoice_dev_pw@127.0.0.1:5432/invoice_db"
     )
 
+    # Relative to backend/ ; uploaded PDFs land in <storage_dir>/uploads (gitignored).
+    storage_dir: str = "storage"
+
     # Never commit this. Empty by default so the app can start without AI features.
     gemini_api_key: str = ""
 
