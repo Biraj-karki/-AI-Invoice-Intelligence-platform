@@ -1,0 +1,12 @@
+# Normalize text files so Windows and macOS checkouts behave the same.
+* text=auto eol=lf
+
+# Never touch binary files: CRLF rewriting corrupts PDFs, images and fonts.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
