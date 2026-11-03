@@ -1,3 +1,6 @@
+from datetime import date
+from decimal import Decimal
+
 from pydantic import BaseModel, Field
 
 
@@ -63,3 +66,33 @@ class ExtractedText(BaseModel):
     page_count: int
     character_count: int
     preview: str = Field(description="First 300 characters of the extracted text.")
+
+
+class InvoiceLineItemOut(BaseModel):
+    description: str | None = None
+    quantity: Decimal | None = None
+    unit_price: Decimal | None = None
+    amount: Decimal | None = None
+
+
+class InvoiceExtractionOut(BaseModel):
+    """Normalised invoice ready for review or storage."""
+
+    filename: str
+    stored_as: str
+    page_count: int
+
+    vendor_name: str | None = None
+    invoice_number: str | None = None
+    invoice_date: date | None = None
+    currency: str | None = None
+
+    subtotal: Decimal | None = None
+    tax_amount: Decimal | None = None
+    total_amount: Decimal | None = None
+
+    line_items: list[InvoiceLineItemOut] = Field(default_factory=list)
+    issues: list[str] = Field(
+        default_factory=list,
+        description="Data-quality warnings for a human to review.",
+    )

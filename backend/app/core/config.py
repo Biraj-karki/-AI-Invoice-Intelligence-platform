@@ -39,13 +39,24 @@ class Settings(BaseSettings):
 
     # Never commit this. Empty by default so the app can start without AI features.
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.8-flash"
-    gemini_timeout_seconds: float = 60.0
+    gemini_model: str = "gemini-3.6-flash"
+    # Comma-separated; tried in order when the primary model is overloaded.
+    gemini_fallback_models: str = "gemini-3.8-flash,gemini-3.5-flash-lite"
+    gemini_timeout_seconds: float = 90.0
 
     @property
     def cors_origin_list(self) -> list[str]:
         """Split CORS_ORIGINS on commas, trimming blanks."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def gemini_fallback_list(self) -> list[str]:
+        """Split GEMINI_FALLBACK_MODELS on commas, trimming blanks."""
+        return [
+            model.strip()
+            for model in self.gemini_fallback_models.split(",")
+            if model.strip()
+        ]
 
 
 @lru_cache
