@@ -7,6 +7,7 @@ psycopg[binary]==3.3.7
 alembic==1.20.1
 python-multipart==0.0.33
 pdfplumber==0.11.10
+google-genai==2.34.0
 
 # Testing
 pytest==9.2.0

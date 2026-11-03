@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     # Never commit this. Empty by default so the app can start without AI features.
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_timeout_seconds: float = 60.0
 
     @property
     def cors_origin_list(self) -> list[str]:
