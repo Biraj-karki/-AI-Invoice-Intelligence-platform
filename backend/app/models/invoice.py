@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,12 @@ class Invoice(Base):
     )
 
     source_filename: Mapped[str | None] = mapped_column(String(255))
+    stored_path: Mapped[str | None] = mapped_column(String(512))
+
+    # Data-quality warnings raised during normalisation, for the review screen.
+    issues: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
 
     # Verbatim model output, kept for auditing and re-processing.
     raw_extraction: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
