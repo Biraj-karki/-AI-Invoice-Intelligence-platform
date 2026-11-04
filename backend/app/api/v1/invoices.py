@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import BASE_DIR
@@ -24,6 +24,17 @@ from app.services.normalize import NormalizedInvoice, normalize_invoice
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 PREVIEW_CHARS = 300
+
+
+def _like_pattern(term: str) -> str:
+    """Build a case-insensitive "contains" pattern for SQL LIKE.
+
+    The wildcards are escaped first: without that, searching for "50%" would
+    match every invoice because % means "anything" in LIKE, and "a_b" would
+    match "axb" because _ means "one character".
+    """
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 async def _read_pdf(file: UploadFile) -> bytes:
@@ -184,11 +195,34 @@ async def create_invoice(
 def list_invoices(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(
+        None,
+        max_length=100,
+        description="Case-insensitive search over vendor name and invoice number",
+    ),
     db: Session = Depends(get_db),
 ) -> InvoiceListOut:
-    total = db.scalar(select(func.count()).select_from(Invoice)) or 0
+    # An empty or whitespace-only search is the same as no search at all.
+    term = (q or "").strip()
+
+    conditions = []
+    if term:
+        pattern = _like_pattern(term)
+        conditions.append(
+            or_(
+                Invoice.vendor_name.ilike(pattern, escape="\\"),
+                Invoice.invoice_number.ilike(pattern, escape="\\"),
+            )
+        )
+
+    # The total must describe the same filtered set as the page, otherwise the
+    # client would show "page 1 of 5" for a search with one match.
+    total = (
+        db.scalar(select(func.count()).select_from(Invoice).where(*conditions)) or 0
+    )
     invoices = db.scalars(
         select(Invoice)
+        .where(*conditions)
         .order_by(Invoice.created_at.desc(), Invoice.id.desc())
         .limit(limit)
         .offset(offset)

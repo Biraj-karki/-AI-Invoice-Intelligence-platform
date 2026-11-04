@@ -61,10 +61,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function listInvoices(params?: {
   limit?: number;
   offset?: number;
+  q?: string;
 }): Promise<InvoiceListResponse> {
   const search = new URLSearchParams();
   if (params?.limit !== undefined) search.set("limit", String(params.limit));
   if (params?.offset !== undefined) search.set("offset", String(params.offset));
+
+  // Blank searches are omitted entirely, so clearing the box is the same as
+  // never having typed: no "q=" noise in the URL or the request.
+  const term = params?.q?.trim();
+  if (term) search.set("q", term);
 
   const query = search.toString();
   return request<InvoiceListResponse>(
