@@ -68,7 +68,7 @@ export default function InvoiceList() {
   if (invoices.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-slate-300 p-6 text-slate-500">
-        No invoices yet. Upload one through the API to see it here.
+        No invoices yet. Upload one above to see it here.
       </p>
     );
   }

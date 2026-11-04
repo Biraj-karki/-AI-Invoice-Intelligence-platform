@@ -71,3 +71,16 @@ export function listInvoices(params?: {
 export function getInvoice(id: number): Promise<InvoiceDetail> {
   return request<InvoiceDetail>(`/api/v1/invoices/${id}`);
 }
+
+/**
+ * Upload a PDF and wait for Gemini to extract it.
+ *
+ * No Content-Type header on purpose: the browser must set it itself so it can
+ * include the multipart boundary. Setting it by hand breaks the upload.
+ */
+export function createInvoice(file: File): Promise<InvoiceDetail> {
+  const body = new FormData();
+  body.append("file", file);
+
+  return request<InvoiceDetail>("/api/v1/invoices", { method: "POST", body });
+}
