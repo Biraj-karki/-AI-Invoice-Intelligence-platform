@@ -1,63 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { ApiError, listInvoices } from "@/lib/api";
+import { formatMoney } from "@/lib/format";
 import type { InvoiceSummary } from "@/lib/types";
-
-function formatMoney(value: string | null, currency: string | null): string {
-  if (value === null) return "—";
-
-  const amount = Number(value);
-  if (Number.isNaN(amount)) return value;
-
-  const formatted = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-
-  return currency ? `${formatted} ${currency}` : formatted;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    extracted: "bg-emerald-100 text-emerald-800",
-    review: "bg-amber-100 text-amber-900",
-    pending: "bg-slate-200 text-slate-700",
-    failed: "bg-red-100 text-red-800",
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-        styles[status] ?? "bg-slate-200 text-slate-700"
-      }`}
-    >
-      {status}
-    </span>
-  );
-}
+import StatusBadge from "./StatusBadge";
 
 export default function InvoiceList() {
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string>("");
-
-  const load = useCallback(async () => {
-    setState("loading");
-    try {
-      const data = await listInvoices({ limit: 20 });
-      setInvoices(data.items);
-      setState("ready");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unexpected error.");
-      setState("error");
-    }
-  }, []);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    // `cancelled` stops a late response from writing state into an unmounted
+    // component (React Strict Mode mounts, unmounts and remounts in dev).
+    let cancelled = false;
+
+    listInvoices({ limit: 20 })
+      .then((data) => {
+        if (cancelled) return;
+        setInvoices(data.items);
+        setState("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof ApiError ? err.message : "Unexpected error.");
+        setState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  function retry() {
+    setState("loading");
+    setReloadKey((key) => key + 1);
+  }
 
   if (state === "loading") {
     return (
@@ -74,7 +56,7 @@ export default function InvoiceList() {
         <p className="mt-1 text-sm text-red-700">{error}</p>
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={retry}
           className="mt-4 rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800"
         >
           Try again
@@ -106,8 +88,13 @@ export default function InvoiceList() {
         <tbody className="divide-y divide-slate-100">
           {invoices.map((invoice) => (
             <tr key={invoice.id} className="hover:bg-slate-50">
-              <td className="px-4 py-3 font-medium text-slate-900">
-                {invoice.vendor_name ?? "Unknown vendor"}
+              <td className="px-4 py-3 font-medium">
+                <Link
+                  href={`/invoices/${invoice.id}`}
+                  className="text-slate-900 underline-offset-2 hover:underline"
+                >
+                  {invoice.vendor_name ?? "Unknown vendor"}
+                </Link>
               </td>
               <td className="px-4 py-3 text-slate-600">
                 {invoice.invoice_number ?? "—"}

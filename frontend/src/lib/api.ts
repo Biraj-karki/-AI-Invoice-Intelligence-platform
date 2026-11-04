@@ -1,4 +1,4 @@
-import type { InvoiceListResponse } from "./types";
+import type { InvoiceDetail, InvoiceListResponse } from "./types";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -66,4 +66,8 @@ export function listInvoices(params?: {
   return request<InvoiceListResponse>(
     `/api/v1/invoices${query ? `?${query}` : ""}`,
   );
+}
+
+export function getInvoice(id: number): Promise<InvoiceDetail> {
+  return request<InvoiceDetail>(`/api/v1/invoices/${id}`);
 }
