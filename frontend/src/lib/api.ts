@@ -1,4 +1,8 @@
-import type { InvoiceDetail, InvoiceListResponse } from "./types";
+import type {
+  InvoiceDetail,
+  InvoiceListResponse,
+  InvoiceStats,
+} from "./types";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -100,4 +104,8 @@ export function resolveInvoice(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   });
+}
+
+export function getInvoiceStats(): Promise<InvoiceStats> {
+  return request<InvoiceStats>("/api/v1/invoices/stats");
 }

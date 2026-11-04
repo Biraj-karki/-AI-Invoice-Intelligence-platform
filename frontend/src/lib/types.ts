@@ -46,3 +46,34 @@ export interface InvoiceDetail extends InvoiceSummary {
   issues: string[];
   line_items: LineItem[];
 }
+
+/** Mirrors app/schemas/invoice.py::VendorSpendOut */
+export interface VendorSpend {
+  vendor_name: string;
+  invoice_count: number;
+  total_amount: string;
+}
+
+/** Mirrors app/schemas/invoice.py::MonthSpendOut */
+export interface MonthSpend {
+  month: string;
+  invoice_count: number;
+  total_amount: string;
+}
+
+/** Mirrors app/schemas/invoice.py::CurrencyStatsOut */
+export interface CurrencyStats {
+  currency: string;
+  invoice_count: number;
+  total_amount: string;
+  by_vendor: VendorSpend[];
+  by_month: MonthSpend[];
+}
+
+/** Mirrors app/schemas/invoice.py::InvoiceStatsOut */
+export interface InvoiceStats {
+  /** One block per currency: the backend never adds different currencies up. */
+  currencies: CurrencyStats[];
+  excluded_count: number;
+  undated_count: number;
+}

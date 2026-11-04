@@ -48,3 +48,35 @@ class InvoiceResolutionIn(BaseModel):
     """A human decision on an invoice whose numbers did not reconcile."""
 
     status: Literal["approved", "rejected"]
+
+
+class VendorSpendOut(BaseModel):
+    vendor_name: str
+    invoice_count: int
+    total_amount: Decimal
+
+
+class MonthSpendOut(BaseModel):
+    month: str  # "2026-10"
+    invoice_count: int
+    total_amount: Decimal
+
+
+class CurrencyStatsOut(BaseModel):
+    currency: str
+    invoice_count: int
+    total_amount: Decimal
+    by_vendor: list[VendorSpendOut]
+    by_month: list[MonthSpendOut]
+
+
+class InvoiceStatsOut(BaseModel):
+    """Spend aggregates, kept separate per currency on purpose.
+
+    Adding NPR to USD would produce a meaningless number, so the client gets
+    one block per currency instead of a single total.
+    """
+
+    currencies: list[CurrencyStatsOut]
+    excluded_count: int  # invoices in review/rejected/pending/failed
+    undated_count: int  # counted, but no invoice_date, so absent from by_month

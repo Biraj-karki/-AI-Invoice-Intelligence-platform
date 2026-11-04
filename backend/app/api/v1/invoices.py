@@ -12,8 +12,13 @@ from app.schemas.extraction import (
     InvoiceExtractionOut,
     InvoiceLineItemOut,
 )
-from app.schemas.invoice import InvoiceDetailOut, InvoiceListOut, InvoiceResolutionIn
-from app.services import gemini_service, invoice_service, pdf_service
+from app.schemas.invoice import (
+    InvoiceDetailOut,
+    InvoiceListOut,
+    InvoiceResolutionIn,
+    InvoiceStatsOut,
+)
+from app.services import gemini_service, invoice_service, pdf_service, stats_service
 from app.services.normalize import NormalizedInvoice, normalize_invoice
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -190,6 +195,17 @@ def list_invoices(
     ).all()
 
     return InvoiceListOut(items=invoices, total=total, limit=limit, offset=offset)
+
+
+# Declared before "/{invoice_id}" on purpose: Starlette matches routes in
+# order, and "/stats" would otherwise be parsed as an invoice id.
+@router.get(
+    "/stats",
+    response_model=InvoiceStatsOut,
+    summary="Spend aggregates per currency, vendor and month",
+)
+def get_stats(db: Session = Depends(get_db)) -> InvoiceStatsOut:
+    return stats_service.invoice_stats(db)
 
 
 @router.get(
