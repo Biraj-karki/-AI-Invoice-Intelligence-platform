@@ -84,3 +84,20 @@ export function createInvoice(file: File): Promise<InvoiceDetail> {
 
   return request<InvoiceDetail>("/api/v1/invoices", { method: "POST", body });
 }
+
+/**
+ * Record a human decision on an invoice that needed review.
+ *
+ * Unlike the upload, this sends JSON, which is not a CORS-safelisted content
+ * type, so the browser sends an OPTIONS preflight first.
+ */
+export function resolveInvoice(
+  id: number,
+  status: "approved" | "rejected",
+): Promise<InvoiceDetail> {
+  return request<InvoiceDetail>(`/api/v1/invoices/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}

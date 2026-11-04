@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,3 +42,9 @@ class InvoiceListOut(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class InvoiceResolutionIn(BaseModel):
+    """A human decision on an invoice whose numbers did not reconcile."""
+
+    status: Literal["approved", "rejected"]

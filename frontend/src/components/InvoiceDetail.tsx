@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ApiError, getInvoice } from "@/lib/api";
+import { ApiError, getInvoice, resolveInvoice } from "@/lib/api";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
@@ -15,6 +15,10 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
   const [state, setState] = useState<State>("loading");
   const [error, setError] = useState<string>("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [resolving, setResolving] = useState<"approved" | "rejected" | null>(
+    null,
+  );
+  const [actionError, setActionError] = useState<string>("");
 
   // Guard before the request: "/invoices/abc" would come back as a 422.
   // Derived during render so an invalid id never needs a state update.
@@ -51,6 +55,23 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
   function retry() {
     setState("loading");
     setReloadKey((key) => key + 1);
+  }
+
+  async function resolve(status: "approved" | "rejected") {
+    if (invoice === null || resolving !== null) return;
+
+    setResolving(status);
+    setActionError("");
+
+    try {
+      // The API returns the updated invoice, so the badge and panel update
+      // from the server's answer instead of guessing what changed.
+      setInvoice(await resolveInvoice(invoice.id, status));
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Unexpected error.");
+    } finally {
+      setResolving(null);
+    }
   }
 
   if (numericId === null || state === "missing") {
@@ -110,16 +131,62 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
       </div>
 
       {invoice.issues.length > 0 && (
-        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-medium text-amber-900">
-            Needs review — {invoice.issues.length}{" "}
-            {invoice.issues.length === 1 ? "issue" : "issues"} found
+        <div
+          className={`mt-6 rounded-lg border p-4 ${
+            invoice.status === "review"
+              ? "border-amber-200 bg-amber-50"
+              : "border-slate-200 bg-slate-50"
+          }`}
+        >
+          <p
+            className={`text-sm font-medium ${
+              invoice.status === "review" ? "text-amber-900" : "text-slate-700"
+            }`}
+          >
+            {invoice.status === "review"
+              ? `Needs review — ${invoice.issues.length} ${
+                  invoice.issues.length === 1 ? "issue" : "issues"
+                } found`
+              : `Resolved as ${invoice.status} — ${invoice.issues.length} ${
+                  invoice.issues.length === 1 ? "issue" : "issues"
+                } kept on record`}
           </p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+          <ul
+            className={`mt-2 list-disc space-y-1 pl-5 text-sm ${
+              invoice.status === "review" ? "text-amber-900" : "text-slate-600"
+            }`}
+          >
             {invoice.issues.map((issue) => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
+
+          {invoice.status === "review" && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void resolve("approved")}
+                disabled={resolving !== null}
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {resolving === "approved" ? "Approving…" : "Approve"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void resolve("rejected")}
+                disabled={resolving !== null}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resolving === "rejected" ? "Rejecting…" : "Reject"}
+              </button>
+            </div>
+          )}
+
+          {actionError !== "" && (
+            <p role="alert" className="mt-3 text-sm text-red-700">
+              {actionError}
+            </p>
+          )}
         </div>
       )}
 

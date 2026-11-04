@@ -1,4 +1,10 @@
-export type InvoiceStatus = "pending" | "extracted" | "review" | "failed";
+export type InvoiceStatus =
+  | "pending"
+  | "extracted"
+  | "review"
+  | "approved"
+  | "rejected"
+  | "failed";
 
 /** Mirrors app/schemas/invoice.py::InvoiceSummaryOut */
 export interface InvoiceSummary {

@@ -160,3 +160,92 @@ def test_stored_path_is_saved_relative_to_backend() -> None:
     path = BASE_DIR / "storage" / "uploads" / "abc123.pdf"
 
     assert _relative_stored_path(path) == "storage/uploads/abc123.pdf"
+
+
+# --- review resolution -------------------------------------------------------
+
+
+def _review_invoice_id(api_client, monkeypatch) -> int:
+    """Create an invoice whose totals do not reconcile, so it lands in review."""
+    monkeypatch.setattr(gemini_service, "extract_invoice", _inconsistent_extraction)
+    response = _upload(api_client)
+    assert response.status_code == 201
+    assert response.json()["status"] == "review"
+    return response.json()["id"]
+
+
+def test_approve_review_invoice(api_client, db_session, monkeypatch) -> None:
+    invoice_id = _review_invoice_id(api_client, monkeypatch)
+
+    response = api_client.patch(
+        f"{COLLECTION}/{invoice_id}", json={"status": "approved"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "approved"
+    # Approving is a human decision, not a data fix: the issues stay on record.
+    assert body["issues"]
+
+    db_session.expire_all()
+    assert db_session.get(Invoice, invoice_id).status == "approved"
+
+
+def test_reject_review_invoice(api_client, db_session, monkeypatch) -> None:
+    invoice_id = _review_invoice_id(api_client, monkeypatch)
+
+    response = api_client.patch(
+        f"{COLLECTION}/{invoice_id}", json={"status": "rejected"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
+
+    db_session.expire_all()
+    assert db_session.get(Invoice, invoice_id).status == "rejected"
+
+
+def test_cannot_resolve_a_cleanly_extracted_invoice(
+    api_client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(gemini_service, "extract_invoice", _consistent_extraction)
+    invoice_id = _upload(api_client).json()["id"]
+
+    response = api_client.patch(
+        f"{COLLECTION}/{invoice_id}", json={"status": "approved"}
+    )
+
+    assert response.status_code == 409
+    assert "review" in response.json()["detail"]
+
+    db_session.expire_all()
+    assert db_session.get(Invoice, invoice_id).status == "extracted"
+
+
+def test_cannot_resolve_the_same_invoice_twice(api_client, monkeypatch) -> None:
+    invoice_id = _review_invoice_id(api_client, monkeypatch)
+
+    first = api_client.patch(f"{COLLECTION}/{invoice_id}", json={"status": "approved"})
+    second = api_client.patch(f"{COLLECTION}/{invoice_id}", json={"status": "rejected"})
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert first.json()["status"] == "approved"
+
+
+def test_resolve_unknown_invoice_returns_404(api_client) -> None:
+    response = api_client.patch(
+        f"{COLLECTION}/999999", json={"status": "approved"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_resolve_rejects_an_unknown_status(api_client, monkeypatch) -> None:
+    invoice_id = _review_invoice_id(api_client, monkeypatch)
+
+    response = api_client.patch(
+        f"{COLLECTION}/{invoice_id}", json={"status": "deleted"}
+    )
+
+    assert response.status_code == 422

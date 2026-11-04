@@ -12,7 +12,7 @@ from app.schemas.extraction import (
     InvoiceExtractionOut,
     InvoiceLineItemOut,
 )
-from app.schemas.invoice import InvoiceDetailOut, InvoiceListOut
+from app.schemas.invoice import InvoiceDetailOut, InvoiceListOut, InvoiceResolutionIn
 from app.services import gemini_service, invoice_service, pdf_service
 from app.services.normalize import NormalizedInvoice, normalize_invoice
 
@@ -203,4 +203,27 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Invoice:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
         )
+    return invoice
+
+
+@router.patch(
+    "/{invoice_id}",
+    response_model=InvoiceDetailOut,
+    summary="Approve or reject an invoice that needs review",
+)
+def resolve_invoice(
+    invoice_id: int,
+    payload: InvoiceResolutionIn,
+    db: Session = Depends(get_db),
+) -> Invoice:
+    try:
+        invoice = invoice_service.resolve_invoice(db, invoice_id, payload.status)
+    except invoice_service.InvoiceStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    if invoice is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
+        )
+
     return invoice

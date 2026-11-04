@@ -26,7 +26,8 @@ class Invoice(Base):
     tax_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
 
-    # Lifecycle: pending -> extracted -> reviewed -> failed
+    # Lifecycle: pending -> extracted | review -> approved | rejected (or failed).
+    # "review" means extraction succeeded but the numbers did not reconcile.
     status: Mapped[str] = mapped_column(
         String(32), default="pending", server_default="pending", index=True
     )
