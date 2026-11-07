@@ -163,10 +163,10 @@ describe("InvoiceList — search", () => {
     });
 
     expect(await screen.findByText(/No invoices match/)).toBeInTheDocument();
-    expect(screen.getByText("“zzz”")).toBeInTheDocument();
+    expect(screen.getByText(/“zzz”/)).toBeInTheDocument();
     expect(screen.getByText("No results")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
 
     expect(await screen.findByText("Showing 1–10 of 19")).toBeInTheDocument();
     expect(listInvoices).toHaveBeenLastCalledWith({
@@ -205,10 +205,9 @@ describe("InvoiceList — empty and failure states", () => {
 
     render(<InvoiceList />);
 
+    expect(await screen.findByText("No invoices yet")).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        "No invoices yet. Upload one above to see it here.",
-      ),
+      screen.getByText("Upload one above to see it here."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/No invoices match/)).toBeNull();
   });

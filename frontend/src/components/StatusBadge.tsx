@@ -1,20 +1,17 @@
-const STYLES: Record<string, string> = {
-  extracted: "bg-emerald-100 text-emerald-800",
-  review: "bg-amber-100 text-amber-900",
-  approved: "bg-blue-100 text-blue-800",
-  rejected: "bg-red-100 text-red-800",
-  pending: "bg-slate-200 text-slate-700",
-  failed: "bg-red-100 text-red-800",
+import { Badge } from "./ui";
+
+const TONES: Record<
+  string,
+  "neutral" | "success" | "warning" | "info" | "danger"
+> = {
+  extracted: "success",
+  review: "warning",
+  approved: "info",
+  rejected: "danger",
+  pending: "neutral",
+  failed: "danger",
 };
 
 export default function StatusBadge({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-        STYLES[status] ?? "bg-slate-200 text-slate-700"
-      }`}
-    >
-      {status}
-    </span>
-  );
+  return <Badge tone={TONES[status] ?? "neutral"}>{status}</Badge>;
 }

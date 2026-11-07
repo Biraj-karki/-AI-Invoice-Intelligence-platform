@@ -115,3 +115,8 @@ export function resolveInvoice(
 export function getInvoiceStats(): Promise<InvoiceStats> {
   return request<InvoiceStats>("/api/v1/invoices/stats");
 }
+
+/** Used by the sidebar indicator; proves the API is actually reachable. */
+export function getHealth(): Promise<{ status: string }> {
+  return request<{ status: string }>("/api/v1/health");
+}

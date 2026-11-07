@@ -116,11 +116,16 @@ describe("InvoiceDetail — a loaded invoice", () => {
 
     render(<InvoiceDetail invoiceId="7" />);
 
-    expect(
-      await screen.findByRole("heading", { name: "ACME SUPPLIES PVT. LTD." }),
-    ).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", {
+      name: "ACME SUPPLIES PVT. LTD.",
+    });
+    expect(heading).toBeInTheDocument();
     expect(getInvoice).toHaveBeenCalledWith(7);
-    expect(screen.getByText("INV-2026-0042")).toBeInTheDocument();
+
+    // The number appears twice (breadcrumb + header), so assert the header
+    // block rather than the whole document.
+    expect(heading.parentElement).toHaveTextContent("INV-2026-0042");
+    expect(screen.getByRole("navigation")).toHaveTextContent("INV-2026-0042");
     expect(screen.getByText("extracted")).toBeInTheDocument();
 
     // Money keeps its currency and grouping, from strings only. Scoped to each

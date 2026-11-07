@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * Design tokens.
+ *
+ * One accent (indigo) carries every interactive affordance. Status colours are
+ * reserved for status: green = extracted, amber = needs a human, blue = approved,
+ * red = rejected/failed. Nothing else is allowed to use them, so a coloured
+ * pixel always means something.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    /* The app is light-only by design. The previous dark-mode media query
+       flipped the page background but not the components, which made headings
+       unreadable for anyone whose OS was in dark mode. */
+    @apply bg-slate-50 text-slate-900 font-sans;
+  }
+
+  ::selection {
+    background-color: var(--color-indigo-100);
+    color: var(--color-indigo-950);
+  }
+
+  /* Keyboard users get a consistent ring everywhere; mouse users do not. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-slate-50;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sheen {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A moving highlight for the "AI is working" bar. */
+.animate-sheen {
+  background-size: 200% 100%;
+  animation: sheen 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-sheen,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
 }
