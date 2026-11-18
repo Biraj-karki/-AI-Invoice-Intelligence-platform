@@ -2,7 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, getInvoice, invoiceFileUrl, resolveInvoice } from "@/lib/api";
+import {
+  ApiError,
+  getInvoice,
+  getInvoiceFile,
+  resolveInvoice,
+} from "@/lib/api";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
 import InvoiceDetail from "./InvoiceDetail";
@@ -14,6 +19,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return {
     ...actual,
     getInvoice: vi.fn(),
+    getInvoiceFile: vi.fn(),
     resolveInvoice: vi.fn(),
   };
 });
@@ -51,9 +57,21 @@ function makeInvoice(
 const REVIEW_ISSUE =
   "Line items sum to 50.00 but the subtotal is 100.00 (difference -50.00).";
 
+const PDF_OBJECT_URL = "blob:invoice-preview";
+
 beforeEach(() => {
   vi.mocked(getInvoice).mockReset();
+  vi.mocked(getInvoiceFile).mockReset();
   vi.mocked(resolveInvoice).mockReset();
+
+  // The preview downloads the bytes and hands the browser an object URL.
+  vi.mocked(getInvoiceFile).mockResolvedValue(
+    new Blob(["%PDF-1.4"], { type: "application/pdf" }),
+  );
+
+  // jsdom implements neither, and the preview calls both.
+  URL.createObjectURL = vi.fn(() => PDF_OBJECT_URL);
+  URL.revokeObjectURL = vi.fn();
 });
 
 describe("InvoiceDetail — loading and failure states", () => {
@@ -280,7 +298,7 @@ describe("InvoiceDetail — resolving a review invoice", () => {
 });
 
 describe("InvoiceDetail — original document", () => {
-  it("embeds the stored PDF and links to it in a new tab", async () => {
+  it("downloads the stored PDF with auth and previews it from a blob URL", async () => {
     vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
 
     render(<InvoiceDetail invoiceId="7" />);
@@ -288,14 +306,38 @@ describe("InvoiceDetail — original document", () => {
     const frame = await screen.findByTitle(
       "PDF preview of sample_invoice.pdf",
     );
-    expect(frame).toHaveAttribute(
-      "src",
-      `${invoiceFileUrl(7)}#view=FitH`,
-    );
+    expect(getInvoiceFile).toHaveBeenCalledWith(7);
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(frame).toHaveAttribute("src", `${PDF_OBJECT_URL}#view=FitH`);
 
     const open = screen.getByRole("link", { name: "Open PDF" });
-    expect(open).toHaveAttribute("href", invoiceFileUrl(7));
+    expect(open).toHaveAttribute("href", PDF_OBJECT_URL);
     expect(open).toHaveAttribute("target", "_blank");
+  });
+
+  it("reports a failed download and offers a retry", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+    vi.mocked(getInvoiceFile).mockRejectedValueOnce(
+      new ApiError("The original PDF could not be loaded.", 500),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    expect(
+      await screen.findByText("Could not load the PDF"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("The original PDF could not be loaded.")).toBeInTheDocument();
+
+    vi.mocked(getInvoiceFile).mockResolvedValue(
+      new Blob(["%PDF-1.4"], { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(
+      await screen.findByTitle("PDF preview of sample_invoice.pdf"),
+    ).toBeInTheDocument();
+    expect(getInvoiceFile).toHaveBeenCalledTimes(2);
   });
 
   it("explains that a demo invoice has no file instead of showing a broken frame", async () => {
@@ -306,6 +348,8 @@ describe("InvoiceDetail — original document", () => {
     expect(
       await screen.findByText("No original PDF stored"),
     ).toBeInTheDocument();
+    // Nothing to fetch, so no request should be made at all.
+    expect(getInvoiceFile).not.toHaveBeenCalled();
     expect(screen.queryByTitle(/PDF preview/)).toBeNull();
     expect(screen.queryByRole("link", { name: "Open PDF" })).toBeNull();
   });

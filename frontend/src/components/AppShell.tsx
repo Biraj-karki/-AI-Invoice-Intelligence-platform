@@ -5,10 +5,17 @@ import { Suspense, type ReactNode } from "react";
 import { NavItems } from "./NavItems";
 import NavLinks from "./NavLinks";
 import SystemStatus from "./SystemStatus";
+import UserMenu from "./UserMenu";
 
-function Logo({ compact = false }: { compact?: boolean }) {
+export function Logo({
+  compact = false,
+  href = "/",
+}: {
+  compact?: boolean;
+  href?: string;
+}) {
   return (
-    <Link href="/" className="flex items-center gap-3">
+    <Link href={href} className="flex items-center gap-3">
       <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
         <Sparkles className="h-4 w-4" aria-hidden />
       </span>
@@ -37,7 +44,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <NavLinks variant="desktop" />
         </Suspense>
 
-        <div className="p-3">
+        <div className="space-y-2 p-3">
+          <UserMenu />
           <SystemStatus />
         </div>
       </aside>
@@ -46,9 +54,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Logo compact />
-          <Suspense fallback={<NavItems pathname={null} variant="mobile" />}>
-            <NavLinks variant="mobile" />
-          </Suspense>
+          <div className="flex items-center gap-1">
+            <Suspense fallback={<NavItems pathname={null} variant="mobile" />}>
+              <NavLinks variant="mobile" />
+            </Suspense>
+            <UserMenu variant="compact" />
+          </div>
         </div>
       </header>
 

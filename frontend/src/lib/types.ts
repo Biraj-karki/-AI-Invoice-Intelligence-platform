@@ -1,3 +1,15 @@
+/** Mirrors app/schemas/auth.py::UserOut */
+export interface AuthUser {
+  id: number;
+  email: string;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
 export type InvoiceStatus =
   | "pending"
   | "extracted"

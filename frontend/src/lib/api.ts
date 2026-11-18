@@ -1,8 +1,11 @@
 import type {
+  AuthUser,
   InvoiceDetail,
   InvoiceListResponse,
   InvoiceStats,
+  TokenResponse,
 } from "./types";
+import { getToken } from "./session";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -23,11 +26,17 @@ export class ApiError extends Error {
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  const token = getToken();
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: { Accept: "application/json", ...init?.headers },
+      headers: {
+        Accept: "application/json",
+        // Every protected route reads this; the public ones ignore it.
+        ...(token !== null ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
     });
   } catch {
     // fetch only throws for network/CORS failures, not for 4xx/5xx.
@@ -121,12 +130,62 @@ export function getHealth(): Promise<{ status: string }> {
   return request<{ status: string }>("/api/v1/health");
 }
 
+export function login(
+  email: string,
+  password: string,
+): Promise<TokenResponse> {
+  return request<TokenResponse>("/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function register(
+  email: string,
+  password: string,
+): Promise<TokenResponse> {
+  return request<TokenResponse>("/api/v1/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function getMe(): Promise<AuthUser> {
+  return request<AuthUser>("/api/v1/auth/me");
+}
+
 /**
- * Direct URL for an invoice's original PDF.
+ * Download an invoice's original PDF as a Blob.
  *
- * The browser loads this itself (iframe / new tab), so it is not fetched
- * through request(): a PDF is a document, not JSON.
+ * An <iframe src="..."> cannot send an Authorization header, so the preview
+ * fetches the bytes itself and hands the browser an object URL. The token
+ * never ends up in a URL, browser history or a server access log.
  */
-export function invoiceFileUrl(id: number): string {
-  return `${API_BASE_URL}/api/v1/invoices/${id}/file`;
+export async function getInvoiceFile(id: number): Promise<Blob> {
+  const token = getToken();
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/invoices/${id}/file`, {
+      headers: token !== null ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    throw new ApiError(
+      `Cannot reach the API at ${API_BASE_URL}. Is the backend running?`,
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 401
+        ? "Your session expired. Sign in again."
+        : "The original PDF could not be loaded.",
+      response.status,
+    );
+  }
+
+  return response.blob();
 }
