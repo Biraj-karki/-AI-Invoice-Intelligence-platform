@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -82,6 +83,34 @@ def _relative_stored_path(path: Path) -> str:
         return path.relative_to(BASE_DIR).as_posix()
     except ValueError:  # pragma: no cover - storage outside backend/
         return path.as_posix()
+
+
+def _resolve_stored_pdf(stored_path: str | None) -> Path | None:
+    """Turn a stored_path from the database into a file, or None.
+
+    This is the one place that reads a path from the database and touches the
+    filesystem, so it does the containment check: even if a row were tampered
+    with, a path pointing outside the uploads directory (``../../etc/passwd``,
+    an absolute path elsewhere) is refused rather than served.
+    """
+    if not stored_path:
+        return None
+
+    path = Path(stored_path)
+    if not path.is_absolute():
+        # Stored paths are relative to backend/ so the repo can move.
+        path = BASE_DIR / path
+
+    try:
+        resolved = path.resolve(strict=True)
+        upload_dir = pdf_service.UPLOAD_DIR.resolve()
+    except OSError:  # missing file, broken symlink, permission error
+        return None
+
+    if not resolved.is_relative_to(upload_dir) or not resolved.is_file():
+        return None
+
+    return resolved
 
 
 def _to_response(
@@ -254,6 +283,37 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Invoice:
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
         )
     return invoice
+
+
+@router.get(
+    "/{invoice_id}/file",
+    response_class=FileResponse,
+    summary="Stream the original PDF so it can be previewed",
+)
+def get_invoice_file(invoice_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    invoice = db.get(Invoice, invoice_id)
+    if invoice is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
+        )
+
+    path = _resolve_stored_pdf(invoice.stored_path)
+    if path is None:
+        # Same answer whether the row never had a file or the file was deleted:
+        # the client's next move (show "no preview available") is identical.
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No stored PDF is available for this invoice.",
+        )
+
+    # inline, not attachment: the browser should render it in the preview pane
+    # instead of downloading it.
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=invoice.source_filename or path.name,
+        content_disposition_type="inline",
+    )
 
 
 @router.patch(

@@ -120,3 +120,13 @@ export function getInvoiceStats(): Promise<InvoiceStats> {
 export function getHealth(): Promise<{ status: string }> {
   return request<{ status: string }>("/api/v1/health");
 }
+
+/**
+ * Direct URL for an invoice's original PDF.
+ *
+ * The browser loads this itself (iframe / new tab), so it is not fetched
+ * through request(): a PDF is a document, not JSON.
+ */
+export function invoiceFileUrl(id: number): string {
+  return `${API_BASE_URL}/api/v1/invoices/${id}/file`;
+}

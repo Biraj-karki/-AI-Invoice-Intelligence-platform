@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, getInvoice, resolveInvoice } from "@/lib/api";
+import { ApiError, getInvoice, invoiceFileUrl, resolveInvoice } from "@/lib/api";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
 import InvoiceDetail from "./InvoiceDetail";
@@ -145,7 +145,11 @@ describe("InvoiceDetail — a loaded invoice", () => {
     expect(row).toHaveTextContent("2"); // "2.000" trimmed
     expect(row).toHaveTextContent("2,712.50 NPR");
 
-    expect(screen.getByText("sample_invoice.pdf")).toBeInTheDocument();
+    // The filename now appears twice (saved-from note and PDF footer), so
+    // scope the assertion to the note.
+    expect(screen.getByText(/Saved from/)).toHaveTextContent(
+      "sample_invoice.pdf",
+    );
     // Timestamp is cut to its date part.
     expect(screen.getByText(/on 2026-11-04/)).toBeInTheDocument();
   });
@@ -272,5 +276,37 @@ describe("InvoiceDetail — resolving a review invoice", () => {
     );
     // The invoice is still shown as review, so the user can try again.
     expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+});
+
+describe("InvoiceDetail — original document", () => {
+  it("embeds the stored PDF and links to it in a new tab", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    const frame = await screen.findByTitle(
+      "PDF preview of sample_invoice.pdf",
+    );
+    expect(frame).toHaveAttribute(
+      "src",
+      `${invoiceFileUrl(7)}#view=FitH`,
+    );
+
+    const open = screen.getByRole("link", { name: "Open PDF" });
+    expect(open).toHaveAttribute("href", invoiceFileUrl(7));
+    expect(open).toHaveAttribute("target", "_blank");
+  });
+
+  it("explains that a demo invoice has no file instead of showing a broken frame", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice({ stored_path: null }));
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    expect(
+      await screen.findByText("No original PDF stored"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTitle(/PDF preview/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open PDF" })).toBeNull();
   });
 });

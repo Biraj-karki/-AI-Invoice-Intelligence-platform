@@ -9,6 +9,7 @@ import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
 import StatusBadge from "./StatusBadge";
+import PdfPreview from "./PdfPreview";
 import { buttonClass, Card, cx, InitialAvatar } from "./ui";
 
 type State = "loading" | "ready" | "missing" | "error";
@@ -155,6 +156,9 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         <StatusBadge status={invoice.status} />
       </div>
 
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <div className="min-w-0 space-y-6">
+
       {invoice.issues.length > 0 && (
         <div
           className={cx(
@@ -221,7 +225,11 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/*
+        2x2, not 4-across: on xl the data column is only half the page, so four
+        cards would squeeze "5,425.00 NPR" onto two lines.
+      */}
+      <dl className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Invoice date
@@ -317,6 +325,22 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         <span className="font-mono">{invoice.source_filename ?? "unknown"}</span>{" "}
         on {formatDate(invoice.created_at)}
       </p>
+        </div>
+
+        {/*
+          Beside the fields on wide screens, so a reviewer can check the AI
+          against the source without switching tabs; below them on narrow ones.
+        */}
+        <div className="min-w-0 xl:sticky xl:top-6">
+          <PdfPreview
+            invoiceId={invoice.id}
+            sourceFilename={invoice.source_filename}
+            available={
+              invoice.stored_path !== null && invoice.stored_path !== ""
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }
