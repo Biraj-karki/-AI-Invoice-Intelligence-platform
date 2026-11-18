@@ -1,11 +1,6 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
-from app.main import app
 from app.services import pdf_service
-
-client = TestClient(app)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_invoice.pdf"
 ENDPOINT = "/api/v1/invoices/extract-text"
@@ -25,8 +20,8 @@ def test_looks_like_pdf_checks_signature_not_extension() -> None:
     assert pdf_service.looks_like_pdf(b"hello world") is False
 
 
-def test_endpoint_rejects_non_pdf_bytes() -> None:
-    response = client.post(
+def test_endpoint_rejects_non_pdf_bytes(api_client) -> None:
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("fake.pdf", b"this is plain text", "application/pdf")},
     )
@@ -34,8 +29,8 @@ def test_endpoint_rejects_non_pdf_bytes() -> None:
     assert response.status_code == 400
 
 
-def test_endpoint_rejects_empty_file() -> None:
-    response = client.post(
+def test_endpoint_rejects_empty_file(api_client) -> None:
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("empty.pdf", b"", "application/pdf")},
     )
@@ -43,10 +38,10 @@ def test_endpoint_rejects_empty_file() -> None:
     assert response.status_code == 400
 
 
-def test_endpoint_extracts_text_and_stores_file(tmp_path, monkeypatch) -> None:
+def test_endpoint_extracts_text_and_stores_file(api_client, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(pdf_service, "UPLOAD_DIR", tmp_path)
 
-    response = client.post(
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
     )

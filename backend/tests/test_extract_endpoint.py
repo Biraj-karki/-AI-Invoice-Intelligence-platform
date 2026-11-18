@@ -1,13 +1,9 @@
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.main import app
 from app.schemas.extraction import ExtractedLineItem, InvoiceExtraction
 from app.services import gemini_service, pdf_service
-
-client = TestClient(app)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_invoice.pdf"
 ENDPOINT = "/api/v1/invoices/extract"
@@ -45,11 +41,11 @@ def _fake_extraction(*args, **kwargs) -> InvoiceExtraction:
     )
 
 
-def test_extract_endpoint_returns_normalised_invoice(tmp_path, monkeypatch) -> None:
+def test_extract_endpoint_returns_normalised_invoice(api_client, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(pdf_service, "UPLOAD_DIR", tmp_path)
     monkeypatch.setattr(gemini_service, "extract_invoice", _fake_extraction)
 
-    response = client.post(
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
     )
@@ -69,13 +65,13 @@ def test_extract_endpoint_returns_normalised_invoice(tmp_path, monkeypatch) -> N
     assert len(list(tmp_path.glob("*.pdf"))) == 1
 
 
-def test_extract_endpoint_maps_gemini_failures_to_502(monkeypatch) -> None:
+def test_extract_endpoint_maps_gemini_failures_to_502(api_client, monkeypatch) -> None:
     def _boom(*args, **kwargs):
         raise gemini_service.GeminiError("service_unavailable")
 
     monkeypatch.setattr(gemini_service, "extract_invoice", _boom)
 
-    response = client.post(
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
     )
@@ -84,10 +80,10 @@ def test_extract_endpoint_maps_gemini_failures_to_502(monkeypatch) -> None:
     assert "service_unavailable" in response.json()["detail"]
 
 
-def test_extract_endpoint_rejects_pdf_without_a_text_layer(monkeypatch) -> None:
+def test_extract_endpoint_rejects_pdf_without_a_text_layer(api_client, monkeypatch) -> None:
     monkeypatch.setattr(pdf_service, "extract_pages", lambda data: [""])
 
-    response = client.post(
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("scan.pdf", FIXTURE.read_bytes(), "application/pdf")},
     )
@@ -96,8 +92,8 @@ def test_extract_endpoint_rejects_pdf_without_a_text_layer(monkeypatch) -> None:
     assert "no text layer" in response.json()["detail"].lower()
 
 
-def test_extract_endpoint_rejects_non_pdf() -> None:
-    response = client.post(
+def test_extract_endpoint_rejects_non_pdf(api_client) -> None:
+    response = api_client.post(
         ENDPOINT,
         files={"file": ("fake.pdf", b"definitely not a pdf", "application/pdf")},
     )
@@ -106,9 +102,9 @@ def test_extract_endpoint_rejects_non_pdf() -> None:
 
 
 @pytest.mark.parametrize("filename", ["invoice.txt", "invoice"])
-def test_extract_endpoint_ignores_client_filename_extension(filename: str) -> None:
+def test_extract_endpoint_ignores_client_filename_extension(api_client, filename: str) -> None:
     """Validation is on bytes, so a weird name is still accepted."""
-    response = client.post(
+    response = api_client.post(
         ENDPOINT,
         files={"file": (filename, b"%PDF-1.4 broken but signed", "application/pdf")},
     )

@@ -4,10 +4,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401  - registers the tables on Base.metadata
+from app.core.auth import get_current_user
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models import User
 
 # Tests live in their own schema inside the development database. They never
 # see the rows you created through the UI, and never touch them: asserting
@@ -60,6 +62,37 @@ def db_session(test_engine):
 
 @pytest.fixture
 def api_client(db_session):
+    """A client that is already signed in.
+
+    Individual invoice tests are about invoices, not about the token dance, so
+    the identity dependency is overridden. Auth itself is exercised against
+    anonymous_client in test_auth.py.
+    """
+
+    def override_get_db():
+        yield db_session
+
+    def override_current_user() -> User:
+        # A transient object: invoice endpoints never read it.
+        return User(
+            id=1,
+            email="test@example.com",
+            password_hash="not-used-by-invoice-tests",
+            is_active=True,
+        )
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def anonymous_client(db_session):
+    """A client with no identity: every protected route must reject it."""
+
     def override_get_db():
         yield db_session
 
