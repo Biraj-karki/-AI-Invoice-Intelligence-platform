@@ -67,6 +67,7 @@ describe("InvoiceList — pagination", () => {
       limit: 10,
       offset: 0,
       q: "",
+      status: "",
     });
 
     expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
@@ -90,6 +91,7 @@ describe("InvoiceList — pagination", () => {
       limit: 10,
       offset: 10,
       q: "",
+      status: "",
     });
 
     expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
@@ -116,6 +118,7 @@ describe("InvoiceList — pagination", () => {
       limit: 10,
       offset: 0,
       q: "",
+      status: "",
     });
   });
 });
@@ -146,6 +149,7 @@ describe("InvoiceList — search", () => {
       limit: 10,
       offset: 0,
       q: "acm",
+      status: "",
     });
   });
 
@@ -173,6 +177,7 @@ describe("InvoiceList — search", () => {
       limit: 10,
       offset: 0,
       q: "",
+      status: "",
     });
   });
 
@@ -195,6 +200,94 @@ describe("InvoiceList — search", () => {
       limit: 10,
       offset: 0,
       q: "acme",
+      status: "",
+    });
+  });
+});
+
+describe("InvoiceList — status filter", () => {
+  it("refetches from page 1 with only the chosen status", async () => {
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(
+        page([summary(42, { status: "review" })], 1, 0),
+      );
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await userEvent.setup().selectOptions(
+      screen.getByLabelText("Filter by status"),
+      "review",
+    );
+
+    expect(listInvoices).toHaveBeenLastCalledWith({
+      limit: 10,
+      offset: 0,
+      q: "",
+      status: "review",
+    });
+    expect(await screen.findByText("Showing 1–1 of 1")).toBeInTheDocument();
+  });
+
+  it("keeps the status when paging", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(page([], 0, 0));
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await user.selectOptions(screen.getByLabelText("Filter by status"), "approved");
+    await screen.findByText("No results");
+
+    vi.mocked(listInvoices).mockResolvedValueOnce(secondPage);
+    // With a filter active there is nothing to page through, so prove the
+    // filter survives a search instead: the next request must still carry it.
+    fireEvent.change(screen.getByLabelText("Search invoices"), {
+      target: { value: "acme" },
+    });
+
+    await waitFor(() => expect(listInvoices).toHaveBeenCalledTimes(3), {
+      timeout: 2000,
+    });
+    expect(listInvoices).toHaveBeenLastCalledWith({
+      limit: 10,
+      offset: 0,
+      q: "acme",
+      status: "approved",
+    });
+  });
+
+  it("describes a filtered empty result and clears every filter at once", async () => {
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(page([], 0, 0))
+      .mockResolvedValueOnce(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await userEvent
+      .setup()
+      .selectOptions(screen.getByLabelText("Filter by status"), "failed");
+
+    expect(await screen.findByText(/No invoices/)).toHaveTextContent(
+      "No invoices with status “Failed”.",
+    );
+    expect(screen.getByText("No results")).toBeInTheDocument();
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Show all invoices" }));
+
+    expect(await screen.findByText("Showing 1–10 of 19")).toBeInTheDocument();
+    expect(listInvoices).toHaveBeenLastCalledWith({
+      limit: 10,
+      offset: 0,
+      q: "",
+      status: "",
     });
   });
 });

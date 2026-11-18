@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -14,7 +15,11 @@ import { useEffect, useState } from "react";
 
 import { ApiError, listInvoices } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
-import type { InvoiceListResponse, InvoiceSummary } from "@/lib/types";
+import type {
+  InvoiceListResponse,
+  InvoiceStatus,
+  InvoiceSummary,
+} from "@/lib/types";
 
 import StatusBadge from "./StatusBadge";
 import {
@@ -29,6 +34,17 @@ import {
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
+// "" is "all statuses": no filter, which is also the cheapest request.
+const STATUS_OPTIONS: { value: InvoiceStatus | ""; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "extracted", label: "Extracted" },
+  { value: "review", label: "Needs review" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "failed", label: "Failed" },
+  { value: "pending", label: "Pending" },
+];
+
 export default function InvoiceList() {
   const [data, setData] = useState<InvoiceListResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -38,7 +54,11 @@ export default function InvoiceList() {
   // What the user is typing, and what has actually been sent to the API.
   // They differ for SEARCH_DEBOUNCE_MS, so a request is not fired per keystroke.
   const [search, setSearch] = useState("");
-  const [params, setParams] = useState({ term: "", offset: 0 });
+  const [params, setParams] = useState<{
+    term: string;
+    offset: number;
+    status: InvoiceStatus | "";
+  }>({ term: "", offset: 0, status: "" });
 
   // True between "the user asked for different data" and "the response arrived".
   // Set from event handlers/timeouts, never synchronously inside an effect.
@@ -51,8 +71,8 @@ export default function InvoiceList() {
 
     const timer = setTimeout(() => {
       setPending(true);
-      // A new search always starts at the first page.
-      setParams({ term, offset: 0 });
+      // A new search always starts at the first page, but keeps the filter.
+      setParams((current) => ({ ...current, term, offset: 0 }));
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
@@ -62,7 +82,12 @@ export default function InvoiceList() {
     // Ignore a response that arrives after unmount or after a newer request.
     let cancelled = false;
 
-    listInvoices({ limit: PAGE_SIZE, offset: params.offset, q: params.term })
+    listInvoices({
+      limit: PAGE_SIZE,
+      offset: params.offset,
+      q: params.term,
+      status: params.status,
+    })
       .then((next) => {
         if (cancelled) return;
         setData(next);
@@ -79,7 +104,7 @@ export default function InvoiceList() {
     return () => {
       cancelled = true;
     };
-  }, [params.term, params.offset, reloadKey]);
+  }, [params.term, params.offset, params.status, reloadKey]);
 
   function retry() {
     setState("loading");
@@ -91,8 +116,23 @@ export default function InvoiceList() {
     setParams((current) => ({ ...current, offset }));
   }
 
+  function changeStatus(next: InvoiceStatus | "") {
+    setPending(true);
+    // A different filter is a different result set, so page 1 is the only
+    // offset that is guaranteed to exist.
+    setParams((current) => ({ ...current, status: next, offset: 0 }));
+  }
+
   function clearSearch() {
     setSearch("");
+  }
+
+  // "Show all" resets the filter too: leaving a status active would make the
+  // button look broken (still "No matches" after clearing only the text).
+  function showAll() {
+    setSearch("");
+    setPending(true);
+    setParams({ term: "", offset: 0, status: "" });
   }
 
   if (state === "loading") {
@@ -146,35 +186,71 @@ export default function InvoiceList() {
   const hasPrevious = data.offset > 0;
   const hasNext = data.offset + data.items.length < data.total;
 
+  const statusLabel =
+    STATUS_OPTIONS.find((option) => option.value === params.status)?.label ?? "";
+  const noMatchesDescription = [
+    params.term !== "" ? `No invoices match “${params.term}”` : "No invoices",
+    params.status !== "" ? `with status “${statusLabel}”` : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .concat(".");
+
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div className="relative w-full max-w-sm">
-          <label htmlFor="invoice-search" className="sr-only">
-            Search invoices
-          </label>
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-            aria-hidden
-          />
-          <input
-            id="invoice-search"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search vendor or invoice number"
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none"
-          />
-          {search !== "" && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              aria-label="Clear search"
-              className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
+        <div className="flex w-full flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
+            <label htmlFor="invoice-search" className="sr-only">
+              Search invoices
+            </label>
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+            <input
+              id="invoice-search"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search vendor or invoice number"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none"
+            />
+            {search !== "" && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+
+          <div className="relative w-full sm:w-44">
+            <label htmlFor="invoice-status" className="sr-only">
+              Filter by status
+            </label>
+            <select
+              id="invoice-status"
+              value={params.status}
+              onChange={(event) =>
+                changeStatus(event.target.value as InvoiceStatus | "")
+              }
+              className="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-sm text-slate-900 transition-colors focus:border-indigo-400 focus:bg-white focus:outline-none"
             >
-              <X className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          )}
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -192,7 +268,7 @@ export default function InvoiceList() {
 
       {data.items.length === 0 ? (
         <div className="p-4">
-          {params.term === "" ? (
+          {params.term === "" && params.status === "" ? (
             <EmptyState
               icon={SearchX}
               title="No invoices yet"
@@ -202,11 +278,11 @@ export default function InvoiceList() {
             <EmptyState
               icon={SearchX}
               title="No matches"
-              description={`No invoices match “${params.term}”.`}
+              description={noMatchesDescription}
               action={
                 <button
                   type="button"
-                  onClick={clearSearch}
+                  onClick={showAll}
                   className={buttonClass("secondary")}
                 >
                   Show all invoices

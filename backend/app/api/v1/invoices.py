@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -229,6 +230,14 @@ def list_invoices(
         max_length=100,
         description="Case-insensitive search over vendor name and invoice number",
     ),
+    status_filter: Literal[
+        "pending", "extracted", "review", "approved", "rejected", "failed"
+    ]
+    | None = Query(
+        None,
+        alias="status",
+        description="Only return invoices in this lifecycle state",
+    ),
     db: Session = Depends(get_db),
 ) -> InvoiceListOut:
     # An empty or whitespace-only search is the same as no search at all.
@@ -243,6 +252,8 @@ def list_invoices(
                 Invoice.invoice_number.ilike(pattern, escape="\\"),
             )
         )
+    if status_filter is not None:
+        conditions.append(Invoice.status == status_filter)
 
     # The total must describe the same filtered set as the page, otherwise the
     # client would show "page 1 of 5" for a search with one match.

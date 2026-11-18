@@ -3,6 +3,7 @@ import type {
   InvoiceDetail,
   InvoiceListResponse,
   InvoiceStats,
+  InvoiceStatus,
   TokenResponse,
 } from "./types";
 import { getToken } from "./session";
@@ -71,6 +72,7 @@ export function listInvoices(params?: {
   limit?: number;
   offset?: number;
   q?: string;
+  status?: InvoiceStatus | "";
 }): Promise<InvoiceListResponse> {
   const search = new URLSearchParams();
   if (params?.limit !== undefined) search.set("limit", String(params.limit));
@@ -80,6 +82,10 @@ export function listInvoices(params?: {
   // never having typed: no "q=" noise in the URL or the request.
   const term = params?.q?.trim();
   if (term) search.set("q", term);
+
+  // Same idea for the filter: "" means "all statuses", which is the default
+  // list, so it must not look like a filter in the request.
+  if (params?.status) search.set("status", params.status);
 
   const query = search.toString();
   return request<InvoiceListResponse>(
