@@ -12,7 +12,8 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, exportInvoicesCsv, listInvoices } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
@@ -46,41 +47,179 @@ const STATUS_OPTIONS: { value: InvoiceStatus | ""; label: string }[] = [
   { value: "pending", label: "Pending" },
 ];
 
+const STATUS_VALUES = new Set<string>(
+  STATUS_OPTIONS.map((option) => option.value).filter((value) => value !== ""),
+);
+
+type Filters = {
+  term: string;
+  status: InvoiceStatus | "";
+  offset: number;
+};
+
+/**
+ * Turn the address bar into the one description of what is being shown.
+ *
+ * The URL is the source of truth: reloading it, bookmarking it, sharing it or
+ * pressing Back all produce the same list, because they all produce the same
+ * query string.
+ */
+function readFilters(searchParams: URLSearchParams): Filters {
+  const term = (searchParams.get("q") ?? "").trim();
+
+  // A stale bookmark or a hand-edited URL can carry a status this build does
+  // not know. Showing everything is better than an empty list nobody can
+  // explain, and the fetch is never asked for a value the API would reject.
+  const rawStatus = searchParams.get("status") ?? "";
+  const status = STATUS_VALUES.has(rawStatus)
+    ? (rawStatus as InvoiceStatus)
+    : "";
+
+  // offset=15 is not a page boundary (the API pages by 10), so round down
+  // instead of showing items 16–25 under the label "Page 2".
+  const rawOffset = Number(searchParams.get("offset") ?? 0);
+  const offset =
+    Number.isFinite(rawOffset) && rawOffset > 0
+      ? Math.floor(rawOffset / PAGE_SIZE) * PAGE_SIZE
+      : 0;
+
+  return { term, status, offset };
+}
+
+function toHref(pathname: string, filters: Filters): string {
+  // Only non-default values go in: "/?q=&status=&offset=0" is noise, and "/"
+  // is the address people expect when nothing is filtered.
+  const search = new URLSearchParams();
+  if (filters.term !== "") search.set("q", filters.term);
+  if (filters.status !== "") search.set("status", filters.status);
+  if (filters.offset > 0) search.set("offset", String(filters.offset));
+
+  const query = search.toString();
+  return query === "" ? pathname : `${pathname}?${query}`;
+}
+
+export function InvoiceListSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <span className="sr-only">Loading invoices…</span>
+      <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+        <Skeleton className="h-9 w-full max-w-sm" />
+        <Skeleton className="ml-auto h-4 w-20" />
+      </div>
+      <div className="divide-y divide-slate-100">
+        {Array.from({ length: 5 }, (_, index) => (
+          <div key={index} className="flex items-center gap-4 px-4 py-4">
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-3.5 w-40" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="ml-auto h-4 w-20" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The search box keeps its own draft so typing stays instant, then hands the
+ * settled term up. Remounting it (via a key) would drop the caret mid-word, so
+ * instead it adopts a term that changed underneath it (Back, "Show all").
+ */
+function SearchBox({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (term: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+
+  // Adjusting state during render is the documented way to follow a prop.
+  // It is guarded so it runs once per change, not on every render.
+  if (value !== seen) {
+    setSeen(value);
+    setDraft(value);
+  }
+
+  useEffect(() => {
+    const term = draft.trim();
+    if (term === value) return;
+
+    const timer = setTimeout(() => onCommit(term), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [draft, value, onCommit]);
+
+  return (
+    <div className="relative w-full sm:max-w-sm">
+      <label htmlFor="invoice-search" className="sr-only">
+        Search invoices
+      </label>
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+        aria-hidden
+      />
+      <input
+        id="invoice-search"
+        type="search"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Search vendor or invoice number"
+        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none"
+      />
+      {draft !== "" && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft("");
+            onCommit("");
+          }}
+          aria-label="Clear search"
+          className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function InvoiceList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const filters = readFilters(searchParams);
+  const currentHref = toHref(pathname, filters);
+
   const [data, setData] = useState<InvoiceListResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string>("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  // What the user is typing, and what has actually been sent to the API.
-  // They differ for SEARCH_DEBOUNCE_MS, so a request is not fired per keystroke.
-  const [search, setSearch] = useState("");
-  const [params, setParams] = useState<{
-    term: string;
-    offset: number;
-    status: InvoiceStatus | "";
-  }>({ term: "", offset: 0, status: "" });
-
   // True between "the user asked for different data" and "the response arrived".
-  // Set from event handlers/timeouts, never synchronously inside an effect.
+  // Set from event handlers, never synchronously inside an effect.
   const [pending, setPending] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
 
-  // Debounce: only the last keystroke within the window reaches the API.
-  useEffect(() => {
-    const term = search.trim();
-    if (term === params.term) return;
+  // replace, not push: a keystroke should not become a history entry, or the
+  // Back button would step through every letter typed. scroll: false keeps the
+  // list where it is instead of jumping to the top on each filter change.
+  const applyFilters = useCallback(
+    (next: Filters) => {
+      const href = toHref(pathname, next);
+      if (href === currentHref) return;
 
-    const timer = setTimeout(() => {
       setPending(true);
-      // A new search always starts at the first page, but keeps the filter.
-      setParams((current) => ({ ...current, term, offset: 0 }));
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [search, params.term]);
+      router.replace(href, { scroll: false });
+    },
+    [currentHref, pathname, router],
+  );
 
   useEffect(() => {
     // Ignore a response that arrives after unmount or after a newer request.
@@ -88,9 +227,9 @@ export default function InvoiceList() {
 
     listInvoices({
       limit: PAGE_SIZE,
-      offset: params.offset,
-      q: params.term,
-      status: params.status,
+      offset: filters.offset,
+      q: filters.term,
+      status: filters.status,
     })
       .then((next) => {
         if (cancelled) return;
@@ -108,7 +247,14 @@ export default function InvoiceList() {
     return () => {
       cancelled = true;
     };
-  }, [params.term, params.offset, params.status, reloadKey]);
+  }, [filters.term, filters.offset, filters.status, reloadKey]);
+
+  const commitTerm = useCallback(
+    (term: string) => {
+      applyFilters({ term, status: filters.status, offset: 0 });
+    },
+    [applyFilters, filters.status],
+  );
 
   function retry() {
     setState("loading");
@@ -116,27 +262,19 @@ export default function InvoiceList() {
   }
 
   function goToPage(offset: number) {
-    setPending(true);
-    setParams((current) => ({ ...current, offset }));
+    applyFilters({ ...filters, offset });
   }
 
   function changeStatus(next: InvoiceStatus | "") {
-    setPending(true);
     // A different filter is a different result set, so page 1 is the only
     // offset that is guaranteed to exist.
-    setParams((current) => ({ ...current, status: next, offset: 0 }));
-  }
-
-  function clearSearch() {
-    setSearch("");
+    applyFilters({ term: filters.term, status: next, offset: 0 });
   }
 
   // "Show all" resets the filter too: leaving a status active would make the
   // button look broken (still "No matches" after clearing only the text).
   function showAll() {
-    setSearch("");
-    setPending(true);
-    setParams({ term: "", offset: 0, status: "" });
+    applyFilters({ term: "", status: "", offset: 0 });
   }
 
   async function exportCsv() {
@@ -148,8 +286,8 @@ export default function InvoiceList() {
     try {
       // The export uses the filters that are on screen, not the current page.
       const blob = await exportInvoicesCsv({
-        q: params.term,
-        status: params.status,
+        q: filters.term,
+        status: filters.status,
       });
 
       const url = URL.createObjectURL(blob);
@@ -173,28 +311,7 @@ export default function InvoiceList() {
   }
 
   if (state === "loading") {
-    return (
-      <Card className="overflow-hidden">
-        <span className="sr-only">Loading invoices…</span>
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-          <Skeleton className="h-9 w-full max-w-sm" />
-          <Skeleton className="ml-auto h-4 w-20" />
-        </div>
-        <div className="divide-y divide-slate-100">
-          {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="flex items-center gap-4 px-4 py-4">
-              <Skeleton className="h-8 w-8 rounded-lg" />
-              <div className="space-y-1.5">
-                <Skeleton className="h-3.5 w-40" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-              <Skeleton className="ml-auto h-4 w-20" />
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </Card>
-    );
+    return <InvoiceListSkeleton />;
   }
 
   if (state === "error" || data === null) {
@@ -219,15 +336,16 @@ export default function InvoiceList() {
   const first = data.total === 0 ? 0 : data.offset + 1;
   const last = data.offset + data.items.length;
   const pageCount = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
-  const page = Math.floor(data.offset / PAGE_SIZE) + 1;
+  const page = Math.min(Math.floor(data.offset / PAGE_SIZE) + 1, pageCount);
   const hasPrevious = data.offset > 0;
   const hasNext = data.offset + data.items.length < data.total;
 
   const statusLabel =
-    STATUS_OPTIONS.find((option) => option.value === params.status)?.label ?? "";
+    STATUS_OPTIONS.find((option) => option.value === filters.status)?.label ??
+    "";
   const noMatchesDescription = [
-    params.term !== "" ? `No invoices match “${params.term}”` : "No invoices",
-    params.status !== "" ? `with status “${statusLabel}”` : "",
+    filters.term !== "" ? `No invoices match “${filters.term}”` : "No invoices",
+    filters.status !== "" ? `with status “${statusLabel}”` : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -237,33 +355,7 @@ export default function InvoiceList() {
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <div className="flex w-full flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
-          <div className="relative w-full sm:max-w-sm">
-            <label htmlFor="invoice-search" className="sr-only">
-              Search invoices
-            </label>
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <input
-              id="invoice-search"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search vendor or invoice number"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none"
-            />
-            {search !== "" && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                aria-label="Clear search"
-                className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            )}
-          </div>
+          <SearchBox value={filters.term} onCommit={commitTerm} />
 
           <div className="relative w-full sm:w-44">
             <label htmlFor="invoice-status" className="sr-only">
@@ -271,7 +363,7 @@ export default function InvoiceList() {
             </label>
             <select
               id="invoice-status"
-              value={params.status}
+              value={filters.status}
               onChange={(event) =>
                 changeStatus(event.target.value as InvoiceStatus | "")
               }
@@ -329,7 +421,28 @@ export default function InvoiceList() {
 
       {data.items.length === 0 ? (
         <div className="p-4">
-          {params.term === "" && params.status === "" ? (
+          {data.total > 0 ? (
+            // A shared link can point past the last page (an invoice was
+            // deleted since, or someone edited offset by hand).
+            <EmptyState
+              icon={SearchX}
+              title="This page is empty"
+              description={`There ${
+                data.total === 1 ? "is" : "are"
+              } only ${data.total} ${
+                data.total === 1 ? "invoice" : "invoices"
+              } matching this view.`}
+              action={
+                <button
+                  type="button"
+                  onClick={() => goToPage(0)}
+                  className={buttonClass("secondary")}
+                >
+                  Back to page 1
+                </button>
+              }
+            />
+          ) : filters.term === "" && filters.status === "" ? (
             <EmptyState
               icon={SearchX}
               title="No invoices yet"

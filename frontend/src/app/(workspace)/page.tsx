@@ -1,4 +1,6 @@
-import InvoiceList from "@/components/InvoiceList";
+import { Suspense } from "react";
+
+import InvoiceList, { InvoiceListSkeleton } from "@/components/InvoiceList";
 import UploadInvoice from "@/components/UploadInvoice";
 import { PageHeader } from "@/components/ui";
 
@@ -27,7 +29,12 @@ export default function Home() {
           </h2>
           <p className="text-xs text-slate-500">Newest first</p>
         </div>
-        <InvoiceList />
+        {/* useSearchParams needs a Suspense boundary: the list is the only
+            part of the page that depends on the query string, so the rest can
+            still be prerendered. */}
+        <Suspense fallback={<InvoiceListSkeleton />}>
+          <InvoiceList />
+        </Suspense>
       </section>
     </div>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,53 @@ import { ApiError, exportInvoicesCsv, listInvoices } from "@/lib/api";
 import type { InvoiceListResponse, InvoiceSummary } from "@/lib/types";
 
 import InvoiceList from "./InvoiceList";
+
+// A stand-in for the address bar: the href is the store, so a router.replace
+// from the component is visible to useSearchParams on the next render, exactly
+// as a real navigation would be.
+const nav = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  let href = "/";
+
+  function subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }
+
+  function set(next: string) {
+    href = next;
+    for (const listener of listeners) listener();
+  }
+
+  return {
+    get: () => href,
+    reset() {
+      href = "/";
+    },
+    set,
+    subscribe,
+    replace: vi.fn(set),
+  };
+});
+
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+
+  function useHref() {
+    return useSyncExternalStore(nav.subscribe, nav.get, nav.get);
+  }
+
+  return {
+    useRouter: () => ({ replace: nav.replace, push: vi.fn(), refresh: vi.fn() }),
+    usePathname: () => "/",
+    useSearchParams() {
+      const query = useHref().split("?")[1] ?? "";
+      return new URLSearchParams(query);
+    },
+  };
+});
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -60,6 +107,8 @@ beforeEach(() => {
   vi.mocked(listInvoices).mockReset();
   vi.mocked(exportInvoicesCsv).mockReset();
   downloaded = null;
+  nav.reset();
+  nav.replace.mockClear();
 
   // jsdom implements neither object URLs nor a download, so both are stubbed.
   // The link is still in the DOM when click() runs, so read it from there
@@ -305,6 +354,170 @@ describe("InvoiceList — status filter", () => {
       q: "",
       status: "",
     });
+  });
+});
+
+describe("InvoiceList — URL state", () => {
+  it("reads the search, filter and page from the URL", async () => {
+    nav.set("/?q=acme&status=review&offset=10");
+    vi.mocked(listInvoices).mockResolvedValue(secondPage);
+
+    render(<InvoiceList />);
+
+    expect(await screen.findByText("Showing 11–19 of 19")).toBeInTheDocument();
+    expect(listInvoices).toHaveBeenCalledWith({
+      limit: 10,
+      offset: 10,
+      q: "acme",
+      status: "review",
+    });
+    expect(screen.getByLabelText("Search invoices")).toHaveValue("acme");
+    expect(screen.getByLabelText("Filter by status")).toHaveValue("review");
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("writes only the values that differ from the default", async () => {
+    nav.set("/?q=acme");
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await userEvent
+      .setup()
+      .selectOptions(screen.getByLabelText("Filter by status"), "review");
+
+    // scroll: false so the list does not jump to the top on every change.
+    expect(nav.replace).toHaveBeenCalledWith("/?q=acme&status=review", {
+      scroll: false,
+    });
+  });
+
+  it("keeps the filters in the URL when paging", async () => {
+    const user = userEvent.setup();
+    nav.set("/?q=acme&status=review");
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(secondPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+
+    expect(await screen.findByText("Showing 11–19 of 19")).toBeInTheDocument();
+    expect(nav.replace).toHaveBeenCalledWith(
+      "/?q=acme&status=review&offset=10",
+      { scroll: false },
+    );
+    expect(listInvoices).toHaveBeenLastCalledWith({
+      limit: 10,
+      offset: 10,
+      q: "acme",
+      status: "review",
+    });
+  });
+
+  it("ignores a status the app does not know", async () => {
+    nav.set("/?status=archived");
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    expect(listInvoices).toHaveBeenCalledWith({
+      limit: 10,
+      offset: 0,
+      q: "",
+      status: "",
+    });
+    expect(screen.getByLabelText("Filter by status")).toHaveValue("");
+  });
+
+  it("rounds a hand-edited offset down to a page boundary", async () => {
+    nav.set("/?offset=15");
+    vi.mocked(listInvoices).mockResolvedValue(secondPage);
+
+    render(<InvoiceList />);
+
+    expect(await screen.findByText("Showing 11–19 of 19")).toBeInTheDocument();
+    expect(listInvoices).toHaveBeenCalledWith({
+      limit: 10,
+      offset: 10,
+      q: "",
+      status: "",
+    });
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("returns to a bare URL when every filter is cleared", async () => {
+    nav.set("/?q=zzz&status=failed");
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(page([], 0, 0))
+      .mockResolvedValueOnce(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("No matches");
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Show all invoices" }));
+
+    expect(nav.replace).toHaveBeenCalledWith("/", { scroll: false });
+    expect(await screen.findByText("Showing 1–10 of 19")).toBeInTheDocument();
+  });
+
+  it("offers a way back when the URL points past the last page", async () => {
+    const user = userEvent.setup();
+    nav.set("/?offset=100");
+    vi.mocked(listInvoices)
+      .mockResolvedValueOnce(page([], 19, 100))
+      .mockResolvedValueOnce(firstPage);
+
+    render(<InvoiceList />);
+
+    expect(await screen.findByText("This page is empty")).toBeInTheDocument();
+    expect(
+      screen.getByText("There are only 19 invoices matching this view."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back to page 1" }));
+
+    expect(nav.replace).toHaveBeenCalledWith("/", { scroll: false });
+    expect(await screen.findByText("Showing 1–10 of 19")).toBeInTheDocument();
+  });
+
+  it("puts the debounced search term in the URL", async () => {
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    fireEvent.change(screen.getByLabelText("Search invoices"), {
+      target: { value: "acm" },
+    });
+
+    await waitFor(
+      () =>
+        expect(nav.replace).toHaveBeenCalledWith("/?q=acm", {
+          scroll: false,
+        }),
+      { timeout: 2000 },
+    );
+  });
+
+  it("follows the URL when the browser navigates back", async () => {
+    nav.set("/?q=acme");
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+    expect(screen.getByLabelText("Search invoices")).toHaveValue("acme");
+
+    // Back to the unfiltered page: the box must not keep the old term.
+    act(() => nav.set("/"));
+
+    expect(screen.getByLabelText("Search invoices")).toHaveValue("");
   });
 });
 
