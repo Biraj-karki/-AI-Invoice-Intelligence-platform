@@ -127,6 +127,49 @@ export function resolveInvoice(
   });
 }
 
+/**
+ * Download the invoices matching the current filters as a CSV file.
+ *
+ * Fetched rather than linked for the same reason as the PDF: the browser's own
+ * download would not carry the Authorization header.
+ */
+export async function exportInvoicesCsv(params?: {
+  q?: string;
+  status?: InvoiceStatus | "";
+}): Promise<Blob> {
+  const search = new URLSearchParams();
+  const term = params?.q?.trim();
+  if (term) search.set("q", term);
+  if (params?.status) search.set("status", params.status);
+
+  const query = search.toString();
+  const token = getToken();
+  let response: Response;
+
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/api/v1/invoices/export.csv${query ? `?${query}` : ""}`,
+      { headers: token !== null ? { Authorization: `Bearer ${token}` } : {} },
+    );
+  } catch {
+    throw new ApiError(
+      `Cannot reach the API at ${API_BASE_URL}. Is the backend running?`,
+      0,
+    );
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status === 401
+        ? "Your session expired. Sign in again."
+        : "The CSV could not be exported.",
+      response.status,
+    );
+  }
+
+  return response.blob();
+}
+
 export function getInvoiceStats(): Promise<InvoiceStats> {
   return request<InvoiceStats>("/api/v1/invoices/stats");
 }

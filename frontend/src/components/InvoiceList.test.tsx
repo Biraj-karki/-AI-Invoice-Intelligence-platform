@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, listInvoices } from "@/lib/api";
+import { ApiError, exportInvoicesCsv, listInvoices } from "@/lib/api";
 import type { InvoiceListResponse, InvoiceSummary } from "@/lib/types";
 
 import InvoiceList from "./InvoiceList";
@@ -11,6 +11,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
+    exportInvoicesCsv: vi.fn(),
     listInvoices: vi.fn(),
   };
 });
@@ -51,8 +52,23 @@ const secondPage = page(
   10,
 );
 
+// Set by the stubbed anchor click in beforeEach, so a test can inspect the
+// download it would have started.
+let downloaded: HTMLAnchorElement | null = null;
+
 beforeEach(() => {
   vi.mocked(listInvoices).mockReset();
+  vi.mocked(exportInvoicesCsv).mockReset();
+  downloaded = null;
+
+  // jsdom implements neither object URLs nor a download, so both are stubbed.
+  // The link is still in the DOM when click() runs, so read it from there
+  // instead of aliasing `this`.
+  URL.createObjectURL = vi.fn(() => "blob:invoices-csv");
+  URL.revokeObjectURL = vi.fn();
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+    downloaded = document.querySelector<HTMLAnchorElement>("a[download]");
+  });
 });
 
 describe("InvoiceList — pagination", () => {
@@ -289,6 +305,77 @@ describe("InvoiceList — status filter", () => {
       q: "",
       status: "",
     });
+  });
+});
+
+describe("InvoiceList — CSV export", () => {
+  it("downloads the file under a dated name", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+    vi.mocked(exportInvoicesCsv).mockResolvedValue(
+      new Blob(["\ufeffid,vendor_name"], { type: "text/csv" }),
+    );
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    await waitFor(() => expect(downloaded).not.toBeNull());
+    expect(exportInvoicesCsv).toHaveBeenCalledWith({ q: "", status: "" });
+    expect(downloaded?.download).toMatch(/^invoices-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(downloaded?.href).toBe("blob:invoices-csv");
+    expect(URL.createObjectURL).toHaveBeenCalled();
+  });
+
+  it("exports what is on screen, not the whole table", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+    vi.mocked(exportInvoicesCsv).mockResolvedValue(new Blob(["x"]));
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await user.selectOptions(
+      screen.getByLabelText("Filter by status"),
+      "review",
+    );
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    await waitFor(() =>
+      expect(exportInvoicesCsv).toHaveBeenCalledWith({
+        q: "",
+        status: "review",
+      }),
+    );
+  });
+
+  it("reports a failed export without starting a download", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listInvoices).mockResolvedValue(firstPage);
+    vi.mocked(exportInvoicesCsv).mockRejectedValue(
+      new ApiError("The CSV could not be exported.", 500),
+    );
+
+    render(<InvoiceList />);
+    await screen.findByText("Showing 1–10 of 19");
+
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The CSV could not be exported.",
+    );
+    expect(downloaded).toBeNull();
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  });
+
+  it("is disabled when there is nothing to export", async () => {
+    vi.mocked(listInvoices).mockResolvedValue(page([], 0, 0));
+
+    render(<InvoiceList />);
+
+    expect(await screen.findByText("No invoices yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
   });
 });
 

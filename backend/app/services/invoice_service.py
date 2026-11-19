@@ -1,3 +1,4 @@
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Invoice, LineItem
@@ -14,6 +15,68 @@ RESOLVABLE_FROM = frozenset({STATUS_NEEDS_REVIEW})
 
 class InvoiceStateError(Exception):
     """The invoice exists but is not in a state that allows this transition."""
+
+
+def _like_pattern(term: str) -> str:
+    """Build a case-insensitive "contains" pattern for SQL LIKE.
+
+    The wildcards are escaped first: without that, searching for "50%" would
+    match every invoice because % means "anything" in LIKE, and "a_b" would
+    match "axb" because _ means "one character".
+    """
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _conditions(term: str, status: str | None) -> list:
+    conditions = []
+
+    if term:
+        pattern = _like_pattern(term)
+        conditions.append(
+            or_(
+                Invoice.vendor_name.ilike(pattern, escape="\\"),
+                Invoice.invoice_number.ilike(pattern, escape="\\"),
+            )
+        )
+
+    if status is not None:
+        conditions.append(Invoice.status == status)
+
+    return conditions
+
+
+def list_invoices(
+    db: Session,
+    *,
+    term: str = "",
+    status: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> tuple[list[Invoice], int]:
+    """Return one page of invoices plus the size of the whole filtered set.
+
+    The list endpoint and the CSV export both go through here, so a filter can
+    never mean one thing on screen and another in the downloaded file.
+    `limit=None` means "every match", which is what an export wants.
+    """
+    conditions = _conditions(term, status)
+
+    # The total must describe the same filtered set as the page, otherwise the
+    # client would show "page 1 of 5" for a search with one match.
+    total = (
+        db.scalar(select(func.count()).select_from(Invoice).where(*conditions)) or 0
+    )
+
+    query = (
+        select(Invoice)
+        .where(*conditions)
+        .order_by(Invoice.created_at.desc(), Invoice.id.desc())
+    )
+    if limit is not None:
+        query = query.limit(limit).offset(offset)
+
+    return list(db.scalars(query).all()), total
 
 
 def create_invoice(

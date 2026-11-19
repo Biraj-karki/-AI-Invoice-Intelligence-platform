@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Loader2,
   Search,
   SearchX,
@@ -13,7 +14,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ApiError, listInvoices } from "@/lib/api";
+import { ApiError, exportInvoicesCsv, listInvoices } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import type {
   InvoiceListResponse,
@@ -63,6 +64,9 @@ export default function InvoiceList() {
   // True between "the user asked for different data" and "the response arrived".
   // Set from event handlers/timeouts, never synchronously inside an effect.
   const [pending, setPending] = useState(false);
+
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   // Debounce: only the last keystroke within the window reaches the API.
   useEffect(() => {
@@ -133,6 +137,39 @@ export default function InvoiceList() {
     setSearch("");
     setPending(true);
     setParams({ term: "", offset: 0, status: "" });
+  }
+
+  async function exportCsv() {
+    if (exporting) return;
+
+    setExporting(true);
+    setExportError("");
+
+    try {
+      // The export uses the filters that are on screen, not the current page.
+      const blob = await exportInvoicesCsv({
+        q: params.term,
+        status: params.status,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Give the browser a moment to start the download before dropping the URL.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError
+          ? err.message
+          : "The CSV could not be exported.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (state === "loading") {
@@ -254,6 +291,20 @@ export default function InvoiceList() {
         </div>
 
         <div className="flex items-center gap-3 text-xs text-slate-500">
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={exporting || data.total === 0}
+            title="Download these invoices as a CSV file"
+            className={buttonClass("secondary")}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {exporting ? "Exporting…" : "Export CSV"}
+          </button>
           {pending && (
             <span role="status" className="flex items-center gap-1.5">
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -265,6 +316,16 @@ export default function InvoiceList() {
           </span>
         </div>
       </div>
+
+      {exportError !== "" && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700"
+        >
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          {exportError}
+        </p>
+      )}
 
       {data.items.length === 0 ? (
         <div className="p-4">

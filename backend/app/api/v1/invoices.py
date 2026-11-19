@@ -1,9 +1,9 @@
 from pathlib import Path
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import BASE_DIR
@@ -20,23 +20,18 @@ from app.schemas.invoice import (
     InvoiceResolutionIn,
     InvoiceStatsOut,
 )
-from app.services import gemini_service, invoice_service, pdf_service, stats_service
+from app.services import (
+    csv_service,
+    gemini_service,
+    invoice_service,
+    pdf_service,
+    stats_service,
+)
 from app.services.normalize import NormalizedInvoice, normalize_invoice
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 PREVIEW_CHARS = 300
-
-
-def _like_pattern(term: str) -> str:
-    """Build a case-insensitive "contains" pattern for SQL LIKE.
-
-    The wildcards are escaped first: without that, searching for "50%" would
-    match every invoice because % means "anything" in LIKE, and "a_b" would
-    match "axb" because _ means "one character".
-    """
-    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
 
 
 async def _read_pdf(file: UploadFile) -> bytes:
@@ -243,32 +238,50 @@ def list_invoices(
     # An empty or whitespace-only search is the same as no search at all.
     term = (q or "").strip()
 
-    conditions = []
-    if term:
-        pattern = _like_pattern(term)
-        conditions.append(
-            or_(
-                Invoice.vendor_name.ilike(pattern, escape="\\"),
-                Invoice.invoice_number.ilike(pattern, escape="\\"),
-            )
-        )
-    if status_filter is not None:
-        conditions.append(Invoice.status == status_filter)
-
-    # The total must describe the same filtered set as the page, otherwise the
-    # client would show "page 1 of 5" for a search with one match.
-    total = (
-        db.scalar(select(func.count()).select_from(Invoice).where(*conditions)) or 0
+    items, total = invoice_service.list_invoices(
+        db,
+        term=term,
+        status=status_filter,
+        limit=limit,
+        offset=offset,
     )
-    invoices = db.scalars(
-        select(Invoice)
-        .where(*conditions)
-        .order_by(Invoice.created_at.desc(), Invoice.id.desc())
-        .limit(limit)
-        .offset(offset)
-    ).all()
 
-    return InvoiceListOut(items=invoices, total=total, limit=limit, offset=offset)
+    return InvoiceListOut(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get(
+    "/export.csv",
+    response_class=Response,
+    summary="Download the invoices matching the current filters as CSV",
+)
+def export_invoices(
+    q: str | None = Query(
+        None,
+        max_length=100,
+        description="Case-insensitive search over vendor name and invoice number",
+    ),
+    status_filter: Literal[
+        "pending", "extracted", "review", "approved", "rejected", "failed"
+    ]
+    | None = Query(
+        None,
+        alias="status",
+        description="Only export invoices in this lifecycle state",
+    ),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Every matching invoice, not just the page the browser is showing."""
+    term = (q or "").strip()
+
+    invoices, _ = invoice_service.list_invoices(db, term=term, status=status_filter)
+
+    filename = f"invoices-{date.today().isoformat()}.csv"
+    return Response(
+        csv_service.invoices_to_csv(invoices),
+        media_type="text/csv; charset=utf-8",
+        # attachment: the browser saves the file instead of displaying it.
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # Declared before "/{invoice_id}" on purpose: Starlette matches routes in
