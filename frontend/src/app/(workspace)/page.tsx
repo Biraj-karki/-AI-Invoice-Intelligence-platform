@@ -2,6 +2,11 @@ import InvoiceList from "@/components/InvoiceList";
 import UploadInvoice from "@/components/UploadInvoice";
 import { PageHeader } from "@/components/ui";
 
+// AuthGate renders this page only in the browser, so there is no server shell
+// for Next's instant-navigation validator to inspect. The gate is intentional,
+// so the dev-only check is opted out rather than worked around.
+export const instant = false;
+
 export default function Home() {
   return (
     <div className="space-y-8">

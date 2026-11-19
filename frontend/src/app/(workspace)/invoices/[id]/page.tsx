@@ -3,6 +3,11 @@ import { Suspense } from "react";
 import InvoiceDetail from "@/components/InvoiceDetail";
 import { Skeleton } from "@/components/ui";
 
+// AuthGate renders this page only in the browser, so there is no server shell
+// for Next's instant-navigation validator to inspect. The gate is intentional,
+// so the dev-only check is opted out rather than worked around.
+export const instant = false;
+
 export default function InvoicePage({ params }: PageProps<"/invoices/[id]">) {
   return (
     /*
