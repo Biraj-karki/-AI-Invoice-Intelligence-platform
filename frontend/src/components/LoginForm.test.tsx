@@ -65,6 +65,22 @@ describe("LoginForm — signing in", () => {
     expect(replace).toHaveBeenCalledWith("/");
   });
 
+  it("leaves the form clean for the next sign-in", async () => {
+    vi.mocked(login).mockResolvedValue(TOKEN);
+
+    render(<LoginForm />);
+    const user = await fill("owner@example.com", "correct-horse-battery");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+
+    // Next can keep this page mounted while the workspace is open, so after a
+    // sign-out the user lands back on this very instance: no leftover
+    // password and no button stuck on "Signing in…".
+    expect(screen.getByLabelText("Password")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
+  });
+
   it("shows the server's message and stays put when the password is wrong", async () => {
     vi.mocked(login).mockRejectedValue(
       new ApiError("Incorrect email or password.", 401),
@@ -140,6 +156,10 @@ describe("LoginForm — creating an account", () => {
     );
     expect(setToken).toHaveBeenCalledWith("signed-token");
     expect(replace).toHaveBeenCalledWith("/");
+    // Back to sign-in mode: the account now exists, so "create account" would
+    // only produce a 409 if the page is shown again.
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
   });
 
   it("reports a duplicate email without wiping the form", async () => {

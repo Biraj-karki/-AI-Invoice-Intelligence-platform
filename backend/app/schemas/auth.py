@@ -21,6 +21,13 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
 
 
+class PasswordChangeIn(BaseModel):
+    # No length floor on the current password: a short wrong guess must read as
+    # "incorrect", not as a 422 that hints at the stored policy.
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

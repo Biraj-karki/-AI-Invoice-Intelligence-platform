@@ -65,6 +65,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(detail, response.status);
   }
 
+  // 204 means "done, nothing to say": parsing it as JSON would throw.
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -203,6 +208,26 @@ export function register(
 
 export function getMe(): Promise<AuthUser> {
   return request<AuthUser>("/api/v1/auth/me");
+}
+
+/**
+ * Change the signed-in account's password.
+ *
+ * The token proves who is asking; the current password proves it is really
+ * them, so an unlocked browser cannot lock the owner out.
+ */
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  return request<void>("/api/v1/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
 }
 
 /**

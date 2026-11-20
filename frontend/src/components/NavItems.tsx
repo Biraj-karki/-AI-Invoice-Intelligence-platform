@@ -1,4 +1,4 @@
-import { BarChart3, FileText } from "lucide-react";
+import { BarChart3, FileText, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { cx } from "./ui";
@@ -15,6 +15,12 @@ const NAV = [
     label: "Dashboard",
     icon: BarChart3,
     isActive: (path: string) => path.startsWith("/dashboard"),
+  },
+  {
+    href: "/account",
+    label: "Account",
+    icon: UserRound,
+    isActive: (path: string) => path.startsWith("/account"),
   },
 ];
 

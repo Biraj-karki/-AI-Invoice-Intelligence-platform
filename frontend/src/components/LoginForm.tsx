@@ -63,11 +63,18 @@ export default function LoginForm() {
           : await register(address, password);
 
       setToken(result.access_token);
+
+      // Next keeps visited pages mounted, so this form can be shown again
+      // after signing out. It must not come back holding the old password,
+      // still in "create an account" mode, or stuck behind a dead spinner.
+      setMode("login");
+      setPassword("");
       router.replace("/");
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Something went wrong. Try again.",
       );
+    } finally {
       setBusy(false);
     }
   }
