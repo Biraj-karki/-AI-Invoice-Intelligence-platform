@@ -59,6 +59,17 @@ export interface InvoiceDetail extends InvoiceSummary {
   line_items: LineItem[];
 }
 
+/** Mirrors app/schemas/invoice.py::InvoiceFieldsIn — the editable header. */
+export interface InvoiceFields {
+  vendor_name: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  currency: string | null;
+  subtotal: string | null;
+  tax_amount: string | null;
+  total_amount: string | null;
+}
+
 /** Mirrors app/schemas/invoice.py::VendorSpendOut */
 export interface VendorSpend {
   vendor_name: string;

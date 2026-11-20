@@ -7,6 +7,7 @@ import {
   getInvoice,
   getInvoiceFile,
   resolveInvoice,
+  updateInvoiceFields,
 } from "@/lib/api";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
@@ -21,6 +22,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getInvoice: vi.fn(),
     getInvoiceFile: vi.fn(),
     resolveInvoice: vi.fn(),
+    updateInvoiceFields: vi.fn(),
   };
 });
 
@@ -63,6 +65,7 @@ beforeEach(() => {
   vi.mocked(getInvoice).mockReset();
   vi.mocked(getInvoiceFile).mockReset();
   vi.mocked(resolveInvoice).mockReset();
+  vi.mocked(updateInvoiceFields).mockReset();
 
   // The preview downloads the bytes and hands the browser an object URL.
   vi.mocked(getInvoiceFile).mockResolvedValue(
@@ -297,8 +300,88 @@ describe("InvoiceDetail — resolving a review invoice", () => {
   });
 });
 
-describe("InvoiceDetail — original document", () => {
-  it("downloads the stored PDF with auth and previews it from a blob URL", async () => {
+describe("InvoiceDetail — correcting the numbers", () => {
+  it("offers Edit fields while the invoice is in review", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(
+      makeInvoice({ status: "review", issues: [REVIEW_ISSUE] }),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    expect(
+      await screen.findByRole("button", { name: "Edit fields" }),
+    ).toBeEnabled();
+  });
+
+  it("hides Edit fields once the invoice is no longer in review", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice({ status: "extracted" }));
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    await screen.findByRole("heading", { name: "ACME SUPPLIES PVT. LTD." });
+    expect(screen.queryByRole("button", { name: "Edit fields" })).toBeNull();
+  });
+
+  it("saves a correction and shows the re-judged invoice", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(
+      makeInvoice({ status: "review", issues: [REVIEW_ISSUE] }),
+    );
+    vi.mocked(updateInvoiceFields).mockResolvedValue(
+      makeInvoice({
+        status: "extracted",
+        issues: [],
+        total_amount: "5435.00",
+      }),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Edit fields" }));
+
+    // The form starts from what the extraction produced.
+    const total = screen.getByLabelText("Total");
+    expect(total).toHaveValue("6130.25");
+
+    await user.clear(total);
+    await user.type(total, "5,435.00");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(updateInvoiceFields).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ total_amount: "5435.00" }),
+    );
+    // The server's answer replaces the card grid; the form closes itself.
+    expect(await screen.findByText("extracted")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Total")).toBeNull();
+    expect(screen.getByText("Total").parentElement).toHaveTextContent(
+      "5,435.00 NPR",
+    );
+    // Nothing is left to complain about, so the review panel is gone too.
+    expect(screen.queryByText(REVIEW_ISSUE)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("closes the form on Cancel without saving", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(
+      makeInvoice({ status: "review", issues: [REVIEW_ISSUE] }),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Edit fields" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(updateInvoiceFields).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Total")).toBeNull();
+    // The original numbers and the review actions are back.
+    expect(screen.getByText("Total").parentElement).toHaveTextContent(
+      "6,130.25 NPR",
+    );
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+});
+
+describe("InvoiceDetail — original document", () => {  it("downloads the stored PDF with auth and previews it from a blob URL", async () => {
     vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
 
     render(<InvoiceDetail invoiceId="7" />);

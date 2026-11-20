@@ -1,6 +1,7 @@
 import type {
   AuthUser,
   InvoiceDetail,
+  InvoiceFields,
   InvoiceListResponse,
   InvoiceStats,
   InvoiceStatus,
@@ -129,6 +130,23 @@ export function resolveInvoice(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
+  });
+}
+
+/**
+ * Overwrite the header fields a reviewer corrected.
+ *
+ * The server re-checks the arithmetic and answers with the whole invoice, so
+ * the screen can show the remaining issues without recalculating anything.
+ */
+export function updateInvoiceFields(
+  id: number,
+  fields: InvoiceFields,
+): Promise<InvoiceDetail> {
+  return request<InvoiceDetail>(`/api/v1/invoices/${id}/fields`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
   });
 }
 

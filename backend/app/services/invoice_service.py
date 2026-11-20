@@ -2,7 +2,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Invoice, LineItem
-from app.services.normalize import NormalizedInvoice
+from app.services.normalize import NormalizedInvoice, reconcile_issues
 
 STATUS_EXTRACTED = "extracted"
 STATUS_NEEDS_REVIEW = "review"
@@ -11,6 +11,11 @@ STATUS_REJECTED = "rejected"
 
 # Only an invoice that is actually waiting for a decision can be resolved.
 RESOLVABLE_FROM = frozenset({STATUS_NEEDS_REVIEW})
+
+# Same rule for corrections: once a human has approved or rejected an invoice,
+# its numbers are the record. Editing them afterwards would silently move
+# dashboard totals with no trace of who changed what.
+CORRECTABLE_FROM = frozenset({STATUS_NEEDS_REVIEW})
 
 
 class InvoiceStateError(Exception):
@@ -143,6 +148,60 @@ def resolve_invoice(
         )
 
     invoice.status = status
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def correct_invoice(
+    db: Session,
+    invoice_id: int,
+    corrections: dict[str, object],
+) -> Invoice | None:
+    """Overwrite the header fields a human corrected, then re-judge the invoice.
+
+    `corrections` holds only the fields the caller sent. The line items are not
+    editable here: they are the evidence behind the subtotal, so the reviewer
+    fixes the header to match them (or rejects the document).
+
+    The warnings are recomputed from the corrected numbers instead of being
+    cleared, because a stale "total is 500.00" next to a total of 110.00 would
+    be a lie. When nothing is left to complain about, the invoice stops asking
+    for review and becomes a normal extracted invoice.
+    """
+    invoice = db.get(Invoice, invoice_id)
+    if invoice is None:
+        return None
+
+    if invoice.status not in CORRECTABLE_FROM:
+        raise InvoiceStateError(
+            f"Invoice {invoice_id} is '{invoice.status}', so its fields cannot be "
+            f"corrected. Only invoices in '{STATUS_NEEDS_REVIEW}' can be edited."
+        )
+
+    for field_name, value in corrections.items():
+        setattr(invoice, field_name, value)
+
+    previous_issues = list(invoice.issues)
+
+    issues = reconcile_issues(
+        subtotal=invoice.subtotal,
+        tax=invoice.tax_amount,
+        total=invoice.total_amount,
+        item_amounts=[item.amount for item in invoice.line_items],
+    )
+
+    invoice.issues = issues
+    invoice.status = STATUS_NEEDS_REVIEW if issues else STATUS_EXTRACTED
+
+    # What the extractor originally complained about stays auditable, even
+    # though it no longer describes the numbers on screen. setdefault keeps the
+    # very first list if the invoice is corrected again.
+    if previous_issues:
+        raw = dict(invoice.raw_extraction or {})
+        raw.setdefault("original_issues", previous_issues)
+        invoice.raw_extraction = raw
+
     db.commit()
     db.refresh(invoice)
     return invoice

@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -157,7 +158,7 @@ def normalize_invoice(extraction: InvoiceExtraction) -> NormalizedInvoice:
         else:
             issues.append(f"invalid currency code: {extraction.currency!r}")
 
-    _check_totals(subtotal, tax, total, items, issues)
+    _check_totals(subtotal, tax, total, [item.amount for item in items], issues)
 
     return NormalizedInvoice(
         vendor_name=extraction.vendor_name,
@@ -181,17 +182,38 @@ def _parse_field(raw: str | None, label: str, issues: list[str]) -> Decimal | No
     return value
 
 
+def reconcile_issues(
+    subtotal: Decimal | None,
+    tax: Decimal | None,
+    total: Decimal | None,
+    item_amounts: Sequence[Decimal | None],
+) -> list[str]:
+    """The arithmetic warnings for a set of header values and line amounts.
+
+    Extraction and human correction both call this, so a corrected invoice is
+    judged by exactly the same rule as an extracted one: if the numbers add up,
+    nothing is waiting for review.
+    """
+    issues: list[str] = []
+    _check_totals(subtotal, tax, total, item_amounts, issues)
+    return issues
+
+
 def _check_totals(
     subtotal: Decimal | None,
     tax: Decimal | None,
     total: Decimal | None,
-    items: list[NormalizedLineItem],
+    item_amounts: Sequence[Decimal | None],
     issues: list[str],
 ) -> None:
     """Totals that disagree are a warning, not a rejection: humans review them."""
-    line_sum = sum((item.amount for item in items if item.amount is not None), Decimal("0"))
+    line_sum = sum(
+        (amount for amount in item_amounts if amount is not None), Decimal("0")
+    )
 
-    if subtotal is not None and items and any(i.amount is not None for i in items):
+    if subtotal is not None and item_amounts and any(
+        amount is not None for amount in item_amounts
+    ):
         if abs(line_sum - subtotal) > TOTAL_TOLERANCE:
             issues.append(
                 f"line items sum to {line_sum} but subtotal is {subtotal} "

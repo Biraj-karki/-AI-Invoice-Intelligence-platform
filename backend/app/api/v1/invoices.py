@@ -16,6 +16,7 @@ from app.schemas.extraction import (
 )
 from app.schemas.invoice import (
     InvoiceDetailOut,
+    InvoiceFieldsIn,
     InvoiceListOut,
     InvoiceResolutionIn,
     InvoiceStatsOut,
@@ -352,6 +353,40 @@ def resolve_invoice(
 ) -> Invoice:
     try:
         invoice = invoice_service.resolve_invoice(db, invoice_id, payload.status)
+    except invoice_service.InvoiceStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    if invoice is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
+        )
+
+    return invoice
+
+
+@router.patch(
+    "/{invoice_id}/fields",
+    response_model=InvoiceDetailOut,
+    summary="Correct the header fields of an invoice that needs review",
+)
+def correct_invoice_fields(
+    invoice_id: int,
+    payload: InvoiceFieldsIn,
+    db: Session = Depends(get_db),
+) -> Invoice:
+    """Write the corrected values, then re-check whether the numbers add up.
+
+    The response is the whole invoice as it now stands, so the screen shows the
+    new issues (or lack of them) without guessing what the server decided.
+    """
+    try:
+        invoice = invoice_service.correct_invoice(
+            db,
+            invoice_id,
+            # Only the fields actually sent: a PATCH that mentions the total
+            # must not blank the vendor.
+            payload.model_dump(exclude_unset=True),
+        )
     except invoice_service.InvoiceStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 

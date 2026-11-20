@@ -1,8 +1,9 @@
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LineItemOut(BaseModel):
@@ -48,6 +49,47 @@ class InvoiceResolutionIn(BaseModel):
     """A human decision on an invoice whose numbers did not reconcile."""
 
     status: Literal["approved", "rejected"]
+
+
+class InvoiceFieldsIn(BaseModel):
+    """A human correction of the header fields of an invoice in review.
+
+    Only the fields present in the request are written: omitting a field leaves
+    it untouched, while sending null clears it. Money arrives as a decimal
+    string ("110.00"), never a float, so no cent can be lost on the way in.
+    """
+
+    vendor_name: str | None = Field(default=None, max_length=255)
+    invoice_number: str | None = Field(default=None, max_length=64)
+    invoice_date: date | None = None
+    currency: str | None = None
+    subtotal: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
+    tax_amount: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
+    total_amount: Decimal | None = Field(default=None, max_digits=12, decimal_places=2)
+
+    @field_validator("vendor_name", "invoice_number", "currency", mode="before")
+    @classmethod
+    def _tidy_text(cls, value: object) -> object:
+        # A form field left empty posts "", which is "no value", not a name.
+        if isinstance(value, str):
+            value = value.strip()
+            if value == "":
+                return None
+        return value
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def _upper_currency(cls, value: object) -> object:
+        # "npr" and "NPR" are the same code; storing both would split the
+        # dashboard totals into two currencies.
+        return value.upper() if isinstance(value, str) else value
+
+    @field_validator("currency")
+    @classmethod
+    def _three_letters(cls, value: str | None) -> str | None:
+        if value is not None and re.fullmatch(r"[A-Z]{3}", value) is None:
+            raise ValueError("must be a three-letter currency code such as NPR or USD")
+        return value
 
 
 class VendorSpendOut(BaseModel):

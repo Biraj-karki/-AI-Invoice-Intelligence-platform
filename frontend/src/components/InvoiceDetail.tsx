@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 
 import { ApiError, getInvoice, resolveInvoice } from "@/lib/api";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
+import InvoiceFieldsForm from "./InvoiceFieldsForm";
 import StatusBadge from "./StatusBadge";
 import PdfPreview from "./PdfPreview";
 import { buttonClass, Card, cx, InitialAvatar } from "./ui";
@@ -23,6 +24,7 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
     null,
   );
   const [actionError, setActionError] = useState<string>("");
+  const [editing, setEditing] = useState(false);
 
   // Guard before the request: "/invoices/abc" would come back as a 422.
   // Derived during render so an invalid id never needs a state update.
@@ -40,6 +42,9 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         if (cancelled) return;
         setInvoice(data);
         setState("ready");
+        // A correction belongs to one invoice: switching invoices or retrying
+        // must not leave an editor pointing at the previous one.
+        setEditing(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -194,8 +199,17 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
             ))}
           </ul>
 
-          {invoice.status === "review" && (
+          {invoice.status === "review" && !editing && (
             <div className="mt-4 flex flex-wrap gap-2 pl-9">
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                disabled={resolving !== null}
+                className={buttonClass("secondary")}
+              >
+                <Pencil className="h-4 w-4" aria-hidden />
+                Edit fields
+              </button>
               <button
                 type="button"
                 onClick={() => void resolve("approved")}
@@ -225,44 +239,56 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         </div>
       )}
 
-      {/*
-        2x2, not 4-across: on xl the data column is only half the page, so four
-        cards would squeeze "5,425.00 NPR" onto two lines.
-      */}
-      <dl className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Invoice date
-          </dt>
-          <dd className="mt-1 text-sm font-medium text-slate-900">
-            {invoice.invoice_date ?? "—"}
-          </dd>
-        </div>
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Subtotal
-          </dt>
-          <dd className="mt-1 text-sm font-medium tabular-nums text-slate-900">
-            {formatMoney(invoice.subtotal, invoice.currency)}
-          </dd>
-        </div>
-        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
-          <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Tax
-          </dt>
-          <dd className="mt-1 text-sm font-medium tabular-nums text-slate-900">
-            {formatMoney(invoice.tax_amount, invoice.currency)}
-          </dd>
-        </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm">
-          <dt className="text-xs font-medium uppercase tracking-wide text-indigo-700">
-            Total
-          </dt>
-          <dd className="mt-1 text-lg font-semibold tabular-nums text-indigo-950">
-            {formatMoney(invoice.total_amount, invoice.currency)}
-          </dd>
-        </div>
-      </dl>
+      {editing ? (
+        <InvoiceFieldsForm
+          key={invoice.id}
+          invoice={invoice}
+          onSaved={(updated) => {
+            setInvoice(updated);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        /*
+          2x2, not 4-across: on xl the data column is only half the page, so
+          four cards would squeeze "5,425.00 NPR" onto two lines.
+        */
+        <dl className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Invoice date
+            </dt>
+            <dd className="mt-1 text-sm font-medium text-slate-900">
+              {invoice.invoice_date ?? "—"}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Subtotal
+            </dt>
+            <dd className="mt-1 text-sm font-medium tabular-nums text-slate-900">
+              {formatMoney(invoice.subtotal, invoice.currency)}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Tax
+            </dt>
+            <dd className="mt-1 text-sm font-medium tabular-nums text-slate-900">
+              {formatMoney(invoice.tax_amount, invoice.currency)}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm">
+            <dt className="text-xs font-medium uppercase tracking-wide text-indigo-700">
+              Total
+            </dt>
+            <dd className="mt-1 text-lg font-semibold tabular-nums text-indigo-950">
+              {formatMoney(invoice.total_amount, invoice.currency)}
+            </dd>
+          </div>
+        </dl>
+      )}
 
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
