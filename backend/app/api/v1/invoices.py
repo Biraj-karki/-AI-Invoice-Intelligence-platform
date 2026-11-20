@@ -396,3 +396,41 @@ def correct_invoice_fields(
         )
 
     return invoice
+
+
+@router.delete(
+    "/{invoice_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an invoice and its stored PDF",
+)
+def delete_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Response:
+    """Remove the row and the file behind it.
+
+    Any status can be deleted: the whole point is to clear out a bad upload or
+    a rejected document. The file is resolved first (that check also refuses
+    paths outside the uploads directory), the row is committed next, and only
+    then is the file removed. A failed unlink therefore costs disk space, never
+    an invoice whose PDF has vanished while the row survives.
+    """
+    invoice = db.get(Invoice, invoice_id)
+    if invoice is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
+        )
+
+    path = _resolve_stored_pdf(invoice.stored_path)
+
+    # Line items go with it: the relationship cascades, and the foreign key has
+    # ON DELETE CASCADE as a second line of defence.
+    db.delete(invoice)
+    db.commit()
+
+    if path is not None:
+        try:
+            path.unlink()
+        except OSError:
+            # Already gone or locked by another program. The invoice is, which
+            # is what the user asked for.
+            pass
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

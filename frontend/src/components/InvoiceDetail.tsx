@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, Pencil, Trash2, X } from "lucide-react";
 
-import { ApiError, getInvoice, resolveInvoice } from "@/lib/api";
+import {
+  ApiError,
+  deleteInvoice,
+  getInvoice,
+  resolveInvoice,
+} from "@/lib/api";
 import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
@@ -16,6 +22,7 @@ import { buttonClass, Card, cx, InitialAvatar } from "./ui";
 type State = "loading" | "ready" | "missing" | "error";
 
 export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
+  const router = useRouter();
   const [invoice, setInvoice] = useState<InvoiceDetailData | null>(null);
   const [state, setState] = useState<State>("loading");
   const [error, setError] = useState<string>("");
@@ -25,6 +32,9 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
   );
   const [actionError, setActionError] = useState<string>("");
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string>("");
 
   // Guard before the request: "/invoices/abc" would come back as a 422.
   // Derived during render so an invalid id never needs a state update.
@@ -80,6 +90,25 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
       setActionError(err instanceof ApiError ? err.message : "Unexpected error.");
     } finally {
       setResolving(null);
+    }
+  }
+
+  async function remove() {
+    if (invoice === null || deleting) return;
+
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      await deleteInvoice(invoice.id);
+      // The page the user is looking at no longer exists, so replace rather
+      // than push: Back must not land on a 404.
+      router.replace("/");
+    } catch (err) {
+      setDeleteError(
+        err instanceof ApiError ? err.message : "Something went wrong. Try again.",
+      );
+      setDeleting(false);
     }
   }
 
@@ -351,6 +380,57 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
         <span className="font-mono">{invoice.source_filename ?? "unknown"}</span>{" "}
         on {formatDate(invoice.created_at)}
       </p>
+
+      {/*
+        A quiet link until it is clicked, then an explicit two-button confirm.
+        Deleting is the one action here that cannot be undone, so it never
+        happens on a single stray click.
+      */}
+      <div className="border-t border-slate-200 pt-4">
+        {!confirmDelete ? (
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmDelete(true);
+              setDeleteError("");
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-red-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            Delete invoice
+          </button>
+        ) : (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+            <p className="flex items-start gap-2 text-sm text-red-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              Delete this invoice and its PDF? This cannot be undone.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 pl-6">
+              <button
+                type="button"
+                onClick={() => void remove()}
+                disabled={deleting}
+                className={buttonClass("danger")}
+              >
+                {deleting ? "Deleting…" : "Delete forever"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className={buttonClass("secondary")}
+              >
+                Keep it
+              </button>
+            </div>
+            {deleteError !== "" && (
+              <p role="alert" className="mt-3 pl-6 text-sm text-red-700">
+                {deleteError}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
         </div>
 
         {/*

@@ -150,6 +150,11 @@ export function updateInvoiceFields(
   });
 }
 
+/** Remove an invoice, its line items and the stored PDF. */
+export function deleteInvoice(id: number): Promise<void> {
+  return request<void>(`/api/v1/invoices/${id}`, { method: "DELETE" });
+}
+
 /**
  * Download the invoices matching the current filters as a CSV file.
  *

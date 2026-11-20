@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
+  deleteInvoice,
   getInvoice,
   getInvoiceFile,
   resolveInvoice,
@@ -13,7 +14,13 @@ import type { InvoiceDetail as InvoiceDetailData } from "@/lib/types";
 
 import InvoiceDetail from "./InvoiceDetail";
 
-// Mock only the two functions this component calls. ApiError stays real so the
+const replace = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace }),
+}));
+
+// Mock only the functions this component calls. ApiError stays real so the
 // component's `instanceof` checks still behave as they do in the app.
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -23,6 +30,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getInvoiceFile: vi.fn(),
     resolveInvoice: vi.fn(),
     updateInvoiceFields: vi.fn(),
+    deleteInvoice: vi.fn(),
   };
 });
 
@@ -66,6 +74,8 @@ beforeEach(() => {
   vi.mocked(getInvoiceFile).mockReset();
   vi.mocked(resolveInvoice).mockReset();
   vi.mocked(updateInvoiceFields).mockReset();
+  vi.mocked(deleteInvoice).mockReset();
+  replace.mockReset();
 
   // The preview downloads the bytes and hands the browser an object URL.
   vi.mocked(getInvoiceFile).mockResolvedValue(
@@ -378,6 +388,75 @@ describe("InvoiceDetail — correcting the numbers", () => {
       "6,130.25 NPR",
     );
     expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+});
+
+describe("InvoiceDetail — deleting", () => {
+  it("asks for confirmation before deleting anything", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Delete invoice" }));
+
+    expect(
+      screen.getByText("Delete this invoice and its PDF? This cannot be undone."),
+    ).toBeInTheDocument();
+    // Opening the question is not the same as answering it.
+    expect(deleteInvoice).not.toHaveBeenCalled();
+  });
+
+  it("deletes and leaves the detail page behind", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+    vi.mocked(deleteInvoice).mockResolvedValue(undefined);
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Delete invoice" }));
+    await user.click(screen.getByRole("button", { name: "Delete forever" }));
+
+    expect(deleteInvoice).toHaveBeenCalledWith(7);
+    // replace, not push: Back must not return to a page that no longer exists.
+    expect(replace).toHaveBeenCalledWith("/");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("can be talked out of it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Delete invoice" }));
+    await user.click(screen.getByRole("button", { name: "Keep it" }));
+
+    expect(deleteInvoice).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(
+        "Delete this invoice and its PDF? This cannot be undone.",
+      ),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Delete invoice" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reports a failed delete and stays on the invoice", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getInvoice).mockResolvedValue(makeInvoice());
+    vi.mocked(deleteInvoice).mockRejectedValue(
+      new ApiError("Invoice 7 does not exist.", 404),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+    await user.click(await screen.findByRole("button", { name: "Delete invoice" }));
+    await user.click(screen.getByRole("button", { name: "Delete forever" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Invoice 7 does not exist.",
+    );
+    expect(replace).not.toHaveBeenCalled();
+    // Still available to retry.
+    expect(screen.getByRole("button", { name: "Delete forever" })).toBeEnabled();
   });
 });
 
