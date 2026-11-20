@@ -64,18 +64,18 @@ export default function PdfPreview({
 
   if (!available) {
     return (
-      <Card className="p-6">
+      <Card className="p-5">
         <div className="flex items-start gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-[#faf9f6] text-stone-400">
             <FileX2 className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-900">
+            <p className="text-[13px] font-semibold text-ink">
               No original PDF stored
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-[12.5px] leading-5 text-ink-soft">
               This invoice was saved without a file — demo rows work this way.
-              The extracted fields are still available beside it.
+              The extracted fields are still available below.
             </p>
           </div>
         </div>
@@ -85,42 +85,53 @@ export default function PdfPreview({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <FileText className="h-4 w-4 shrink-0 text-red-600" aria-hidden />
-          <h2 className="truncate text-sm font-semibold text-slate-900">
-            Original document
-          </h2>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
+            <FileText className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-ink">
+              Original document
+            </h2>
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-stone-400">
+              PDF source
+            </p>
+          </div>
         </div>
         {state === "ready" && src !== null ? (
           <a
             href={src}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-indigo-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
           >
             Open PDF
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </a>
         ) : (
-          <span className="text-xs text-slate-400">Loading…</span>
+          <span className="text-[11.5px] text-stone-400">Loading…</span>
         )}
       </div>
 
-      <div className="bg-slate-100 p-2">
+      <div className="bg-[#f2f0ea] p-2">
         {state === "ready" && src !== null ? (
           <iframe
             src={`${src}#view=FitH`}
             title={`PDF preview of ${sourceFilename ?? `invoice ${invoiceId}`}`}
-            className="h-[70vh] w-full rounded-lg border border-slate-200 bg-white xl:h-[calc(100vh-9rem)]"
+            className="h-[70vh] w-full rounded-lg border border-line bg-white xl:h-[calc(100vh-9rem)]"
           />
         ) : state === "error" ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-lg bg-white p-6 text-center">
-            <AlertCircle className="h-5 w-5 text-red-600" aria-hidden />
-            <p className="text-sm font-medium text-slate-900">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-red-50 text-red-600">
+              <AlertCircle className="h-5 w-5" aria-hidden />
+            </span>
+            <p className="text-[13px] font-semibold text-ink">
               Could not load the PDF
             </p>
-            <p className="max-w-sm text-sm text-slate-600">{error}</p>
+            <p className="max-w-sm text-[12.5px] leading-5 text-ink-soft">
+              {error}
+            </p>
             {error.startsWith("Your session expired") ? (
               <Link href="/login" className={buttonClass("secondary")}>
                 Sign in again
@@ -145,7 +156,7 @@ export default function PdfPreview({
 
       {sourceFilename !== null && (
         <p
-          className="truncate border-t border-slate-100 px-4 py-2 text-xs text-slate-500"
+          className="truncate border-t border-line px-4 py-2 font-mono text-[11px] text-stone-500"
           title={sourceFilename}
         >
           {sourceFilename}

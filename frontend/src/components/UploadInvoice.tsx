@@ -1,6 +1,13 @@
 "use client";
 
-import { AlertCircle, FileText, Sparkles, Upload, X } from "lucide-react";
+import {
+  AlertCircle,
+  FileText,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 
@@ -105,19 +112,34 @@ export default function UploadInvoice() {
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-indigo-600" aria-hidden />
-          <h2 className="text-sm font-semibold text-slate-900">AI extraction</h2>
-          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-100">
-            Gemini
-          </span>
-        </div>
-        <p className="text-xs text-slate-500">PDF only · up to {MAX_MB} MB</p>
-      </div>
+    <Card className="relative overflow-hidden">
+      {/* A faint wash behind the header, so the intake reads as the "AI" part
+          of the page without a second colour entering the palette. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(460px_140px_at_12%_0%,rgba(99,102,241,0.10),transparent_75%)]"
+        aria-hidden
+      />
 
-      <div className="p-5">
+      <div className="relative p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+                New invoice
+              </h2>
+              <p className="text-[11.5px] text-ink-soft">
+                Gemini reads the PDF, the arithmetic decides the outcome.
+              </p>
+            </div>
+          </div>
+          <p className="hidden text-[10.5px] font-medium uppercase tracking-[0.12em] text-stone-400 sm:block">
+            PDF · up to {MAX_MB} MB
+          </p>
+        </div>
+
         <div
           onDragOver={(event) => {
             event.preventDefault();
@@ -126,11 +148,11 @@ export default function UploadInvoice() {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           className={cx(
-            "rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
+            "mt-4 rounded-xl border border-dashed p-4 transition-colors sm:px-5",
             dragging
               ? "border-indigo-400 bg-indigo-50/60"
-              : "border-slate-200 bg-slate-50/60",
-            busy && "opacity-80",
+              : "border-stone-300 bg-[#faf9f6]/70",
+            busy && "opacity-90",
           )}
         >
           <input
@@ -143,75 +165,77 @@ export default function UploadInvoice() {
           />
 
           {busy ? (
-            <div className="mx-auto flex max-w-md flex-col items-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="mx-auto flex max-w-md flex-col items-center py-2">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-white shadow-sm ring-1 ring-line">
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
               </span>
-              <p className="mt-4 text-sm font-medium text-slate-900">
+              <p className="mt-3 text-center text-[13px] font-medium text-ink">
                 {busyMessage(elapsed)}
               </p>
               {file !== null && (
-                <p className="mt-1 max-w-full truncate text-xs text-slate-500">
+                <p className="mt-1 max-w-full truncate text-[11.5px] text-ink-soft">
                   {file.name}
                 </p>
               )}
-              <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-stone-200">
                 <div className="animate-sheen h-full w-full bg-gradient-to-r from-indigo-200 via-indigo-500 to-indigo-200" />
               </div>
-              <p className="mt-2 text-[11px] tabular-nums text-slate-400">
+              <p className="mt-2 text-[10.5px] tabular-nums text-stone-400">
                 {elapsed}s elapsed
               </p>
             </div>
           ) : file === null ? (
-            <div className="flex flex-col items-center">
-              <span className="grid h-12 w-12 place-items-center rounded-xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
-                <Upload className="h-5 w-5" aria-hidden />
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-stone-400 shadow-[0_1px_2px_rgba(22,23,28,0.04)]">
+                <Upload className="h-[18px] w-[18px]" aria-hidden />
               </span>
-              <p className="mt-4 text-sm font-medium text-slate-900">
-                Drop a PDF invoice here
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                or choose a file — Gemini will read it for you
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-ink">
+                  Drop a PDF invoice here
+                </p>
+                <p className="mt-0.5 text-[12px] text-ink-soft">
+                  or choose a file — Gemini reads vendor, line items and totals.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className={cx(buttonClass("secondary"), "mt-4")}
+                className={cx(buttonClass("secondary"), "w-full sm:w-auto")}
               >
                 <FileText className="h-4 w-4" aria-hidden />
                 Choose a PDF
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center">
-              <div className="flex w-full max-w-md items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-red-50 text-red-600">
-                  <FileText className="h-5 w-5" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-slate-900">
-                    {file.name}
-                  </span>
-                  <span className="block text-xs text-slate-500">
-                    {humanSize(file.size)} · ready to extract
-                  </span>
-                </span>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
+                <FileText className="h-[18px] w-[18px]" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-ink">
+                  {file.name}
+                </p>
+                <p className="mt-0.5 text-[11.5px] text-ink-soft">
+                  {humanSize(file.size)} · ready to extract
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void upload()}
+                  className={cx(buttonClass("primary"), "flex-1 sm:flex-none")}
+                >
+                  Extract and save
+                </button>
                 <button
                   type="button"
                   onClick={() => choose(null)}
                   aria-label="Remove file"
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-stone-400 transition-colors hover:bg-stone-900/[0.06] hover:text-ink"
                 >
                   <X className="h-4 w-4" aria-hidden />
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="mt-3 text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
-              >
-                Choose a different file
-              </button>
             </div>
           )}
         </div>
@@ -219,27 +243,18 @@ export default function UploadInvoice() {
         {error !== "" && (
           <p
             role="alert"
-            className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-700"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             {error}
           </p>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">
-            The extraction is checked against the invoice&apos;s own arithmetic.
-            If the totals disagree, you get a review, not a guess.
-          </p>
-          <button
-            type="button"
-            onClick={() => void upload()}
-            disabled={file === null || busy}
-            className={buttonClass("primary", "md")}
-          >
-            {busy ? "Uploading…" : "Extract and save"}
-          </button>
-        </div>
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-5 text-stone-500">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+          Every extraction is checked against the invoice&apos;s own arithmetic.
+          If the totals disagree, it goes to review — never silently accepted.
+        </p>
       </div>
     </Card>
   );

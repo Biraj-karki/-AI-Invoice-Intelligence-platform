@@ -23,8 +23,8 @@ import { buttonClass, Card, cx, Skeleton } from "./ui";
 
 const BAR_COLOR = "#4f46e5"; // indigo-600
 const LINE_COLOR = "#6366f1"; // indigo-500
-const GRID_COLOR = "#e2e8f0"; // slate-200
-const AXIS_COLOR = "#64748b"; // slate-500
+const GRID_COLOR = "#e5e3dd"; // the warm hairline used across the app
+const AXIS_COLOR = "#8a8880"; // muted stone
 
 type ChartPoint = { name: string; value: number; label: string; fullName: string };
 
@@ -69,9 +69,9 @@ function ChartTooltip({
   if (point === undefined) return null;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
-      <p className="font-medium text-slate-900">{point.fullName}</p>
-      <p className="tabular-nums text-slate-600">{point.label}</p>
+    <div className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-[0_8px_24px_-12px_rgba(22,23,28,0.35)]">
+      <p className="font-medium text-ink">{point.fullName}</p>
+      <p className="mt-0.5 tabular-nums text-ink-soft">{point.label}</p>
     </div>
   );
 }
@@ -90,33 +90,44 @@ function Kpi({
   return (
     <div
       className={cx(
-        "rounded-xl border p-5 shadow-sm",
+        "relative overflow-hidden rounded-2xl border p-5",
         accent
-          ? "border-indigo-200 bg-indigo-50/60"
-          : "border-slate-200/80 bg-white",
+          ? "border-transparent bg-ink shadow-[0_16px_36px_-22px_rgba(22,23,28,0.9)]"
+          : "border-line bg-white shadow-[0_1px_2px_rgba(22,23,28,0.04),0_12px_32px_-24px_rgba(22,23,28,0.35)]",
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      {accent && (
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(220px_120px_at_100%_0%,rgba(99,102,241,0.5),transparent_72%)]"
+          aria-hidden
+        />
+      )}
+      <div className="relative flex items-start justify-between gap-3">
         <p
           className={cx(
-            "text-xs font-medium uppercase tracking-wide",
-            accent ? "text-indigo-700" : "text-slate-500",
+            "text-[10px] font-semibold uppercase tracking-[0.14em]",
+            accent ? "text-white/45" : "text-stone-400",
           )}
         >
           {label}
         </p>
         <span
           className={cx(
-            "grid h-8 w-8 place-items-center rounded-lg",
+            "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
             accent
-              ? "bg-indigo-100 text-indigo-700"
-              : "bg-slate-100 text-slate-500",
+              ? "bg-white/10 text-white/70 ring-1 ring-inset ring-white/10"
+              : "border border-line bg-[#faf9f6] text-stone-400",
           )}
         >
           <Icon className="h-4 w-4" aria-hidden />
         </span>
       </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">
+      <p
+        className={cx(
+          "relative mt-3 text-[26px] leading-none font-semibold tabular-nums tracking-[-0.03em]",
+          accent ? "text-white" : "text-ink",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -157,14 +168,14 @@ export default function Dashboard() {
 
   if (state === "loading") {
     return (
-      <div className="space-y-8">
+      <div className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-3">
           {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} className="h-28 rounded-xl" />
+            <Skeleton key={index} className="h-[118px] rounded-2xl" />
           ))}
         </div>
-        <Skeleton className="h-96 rounded-xl" />
-        <Skeleton className="h-80 rounded-xl" />
+        <Skeleton className="h-96 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -172,8 +183,10 @@ export default function Dashboard() {
   if (state === "error" || stats === null) {
     return (
       <Card className="border-red-200 bg-red-50/60 p-6">
-        <p className="font-medium text-red-800">Could not load the dashboard</p>
-        <p className="mt-1 text-sm text-red-700">{error}</p>
+        <p className="text-[15px] font-semibold text-red-800">
+          Could not load the dashboard
+        </p>
+        <p className="mt-1.5 text-sm text-red-700">{error}</p>
         <button
           type="button"
           onClick={retry}
@@ -188,13 +201,13 @@ export default function Dashboard() {
   if (stats.currencies.length === 0) {
     return (
       <Card className="flex flex-col items-center px-6 py-16 text-center">
-        <span className="grid h-12 w-12 place-items-center rounded-xl bg-slate-100 text-slate-500">
+        <span className="grid h-12 w-12 place-items-center rounded-xl border border-line bg-[#faf9f6] text-stone-400">
           <Wallet className="h-5 w-5" aria-hidden />
         </span>
-        <p className="mt-4 text-sm font-medium text-slate-900">
+        <p className="mt-4 text-[13px] font-semibold text-ink">
           Nothing to chart yet
         </p>
-        <p className="mt-1 max-w-sm text-sm text-slate-600">
+        <p className="mt-1 max-w-sm text-[12.5px] leading-5 text-ink-soft">
           Upload an invoice and its totals will appear here.
         </p>
         <Link href="/" className={cx(buttonClass("secondary"), "mt-5")}>
@@ -215,10 +228,10 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {stats.currencies.length > 1 && (
         <div
-          className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+          className="inline-flex rounded-xl border border-line bg-white p-1 shadow-[0_1px_2px_rgba(22,23,28,0.04)]"
           role="tablist"
           aria-label="Currency"
         >
@@ -230,10 +243,10 @@ export default function Dashboard() {
               aria-selected={block.currency === active.currency}
               onClick={() => setSelected(block.currency)}
               className={cx(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
                 block.currency === active.currency
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-50",
+                  ? "bg-ink text-white shadow-sm"
+                  : "text-ink-soft hover:bg-stone-900/[0.05] hover:text-ink",
               )}
             >
               {block.currency}
@@ -261,7 +274,7 @@ export default function Dashboard() {
         />
       </dl>
 
-      <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+      <p className="flex items-start gap-2 text-[11.5px] leading-5 text-stone-500">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
         <span>
           Only invoices that were extracted cleanly or approved are counted.
@@ -278,14 +291,16 @@ export default function Dashboard() {
       </p>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
             Spend by vendor
           </h2>
-          <span className="text-xs text-slate-500">{active.currency}</span>
+          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10.5px] font-medium text-stone-600">
+            {active.currency}
+          </span>
         </div>
         {vendorData.length === 0 ? (
-          <p className="px-5 py-10 text-sm text-slate-500">No vendor data yet.</p>
+          <p className="px-5 py-10 text-sm text-ink-soft">No vendor data yet.</p>
         ) : (
           <div className="h-80 p-4">
             <div
@@ -303,7 +318,7 @@ export default function Dashboard() {
                   <XAxis
                     type="number"
                     tickFormatter={compact}
-                    tick={{ fontSize: 12, fill: AXIS_COLOR }}
+                    tick={{ fontSize: 11, fill: AXIS_COLOR }}
                     stroke={GRID_COLOR}
                   />
                   <YAxis
@@ -313,7 +328,10 @@ export default function Dashboard() {
                     tick={{ fontSize: 11, fill: AXIS_COLOR }}
                     stroke={GRID_COLOR}
                   />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f8fafc" }} />
+                  <Tooltip
+                    content={<ChartTooltip />}
+                    cursor={{ fill: "#faf9f6" }}
+                  />
                   <Bar
                     dataKey="value"
                     fill={BAR_COLOR}
@@ -328,14 +346,16 @@ export default function Dashboard() {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+          <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
             Spend by month
           </h2>
-          <span className="text-xs text-slate-500">{active.currency}</span>
+          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10.5px] font-medium text-stone-600">
+            {active.currency}
+          </span>
         </div>
         {monthData.length === 0 ? (
-          <p className="px-5 py-10 text-sm text-slate-500">
+          <p className="px-5 py-10 text-sm text-ink-soft">
             No dated invoices yet, so there is no monthly trend.
           </p>
         ) : (
@@ -353,13 +373,13 @@ export default function Dashboard() {
                   <CartesianGrid stroke={GRID_COLOR} vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 12, fill: AXIS_COLOR }}
+                    tick={{ fontSize: 11, fill: AXIS_COLOR }}
                     stroke={GRID_COLOR}
                   />
                   <YAxis
                     tickFormatter={compact}
                     width={70}
-                    tick={{ fontSize: 12, fill: AXIS_COLOR }}
+                    tick={{ fontSize: 11, fill: AXIS_COLOR }}
                     stroke={GRID_COLOR}
                   />
                   <Tooltip content={<ChartTooltip />} />
@@ -369,6 +389,7 @@ export default function Dashboard() {
                     stroke={LINE_COLOR}
                     strokeWidth={2}
                     dot={{ r: 3 }}
+                    activeDot={{ r: 4 }}
                     isAnimationActive={false}
                   />
                 </LineChart>

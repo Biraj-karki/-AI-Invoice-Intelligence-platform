@@ -6,6 +6,7 @@ export function cx(
   return classes.filter(Boolean).join(" ");
 }
 
+/** The one surface every panel is built from: warm border, soft lift. */
 export function Card({
   children,
   className,
@@ -16,7 +17,7 @@ export function Card({
   return (
     <div
       className={cx(
-        "rounded-xl border border-slate-200/80 bg-white shadow-sm",
+        "rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(22,23,28,0.04),0_12px_32px_-24px_rgba(22,23,28,0.35)]",
         className,
       )}
     >
@@ -26,26 +27,35 @@ export function Card({
 }
 
 export function PageHeader({
+  eyebrow,
   title,
   description,
   actions,
 }: {
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+    <header className="flex flex-wrap items-end justify-between gap-5">
+      <div className="min-w-0">
+        {eyebrow !== undefined && (
+          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-[30px] leading-[1.08] font-semibold tracking-[-0.035em] text-ink sm:text-[34px]">
           {title}
         </h1>
         {description !== undefined && (
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">{description}</p>
+          <p className="mt-2.5 max-w-2xl text-sm leading-6 text-ink-soft">
+            {description}
+          </p>
         )}
       </div>
       {actions}
-    </div>
+    </header>
   );
 }
 
@@ -53,12 +63,12 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 active:bg-indigo-700",
+    "bg-indigo-600 text-white shadow-[0_1px_2px_rgba(22,23,28,0.12),0_8px_20px_-12px_rgba(79,70,229,0.9)] hover:bg-indigo-500 active:bg-indigo-700",
   secondary:
-    "border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+    "border border-line bg-white text-ink shadow-[0_1px_2px_rgba(22,23,28,0.05)] hover:border-stone-300 hover:bg-[#faf9f6] active:bg-stone-100",
+  ghost: "text-ink-soft hover:bg-stone-900/[0.05] hover:text-ink",
   danger:
-    "bg-red-600 text-white shadow-sm hover:bg-red-500 active:bg-red-700",
+    "bg-red-600 text-white shadow-[0_1px_2px_rgba(22,23,28,0.12)] hover:bg-red-500 active:bg-red-700",
 };
 
 /** Shared button styling, also usable on <Link> so links look like buttons. */
@@ -67,8 +77,8 @@ export function buttonClass(
   size: "sm" | "md" = "sm",
 ): string {
   return cx(
-    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-    size === "sm" ? "px-3 py-1.5 text-sm" : "px-4 py-2 text-sm",
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-45",
+    size === "sm" ? "h-9 px-3 text-[13px]" : "h-10 px-4 text-sm",
     VARIANTS[variant],
   );
 }
@@ -76,11 +86,11 @@ export function buttonClass(
 type Tone = "neutral" | "success" | "warning" | "info" | "danger";
 
 const TONES: Record<Tone, string> = {
-  neutral: "bg-slate-100 text-slate-700 ring-slate-200",
-  success: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  warning: "bg-amber-50 text-amber-800 ring-amber-200",
-  info: "bg-blue-50 text-blue-700 ring-blue-200",
-  danger: "bg-red-50 text-red-700 ring-red-200",
+  neutral: "bg-stone-100 text-stone-600 ring-stone-200/90",
+  success: "bg-emerald-50 text-emerald-700 ring-emerald-200/80",
+  warning: "bg-amber-50 text-amber-800 ring-amber-200/80",
+  info: "bg-blue-50 text-blue-700 ring-blue-200/80",
+  danger: "bg-red-50 text-red-700 ring-red-200/80",
 };
 
 export function Badge({
@@ -93,7 +103,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ring-inset",
         TONES[tone],
       )}
     >
@@ -115,12 +125,14 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/60 px-6 py-14 text-center">
-      <span className="grid h-12 w-12 place-items-center rounded-xl bg-slate-100 text-slate-500">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-[#faf9f6]/60 px-6 py-14 text-center">
+      <span className="grid h-11 w-11 place-items-center rounded-xl border border-line bg-white text-stone-400 shadow-[0_1px_2px_rgba(22,23,28,0.04)]">
         <Icon className="h-5 w-5" />
       </span>
-      <p className="mt-4 text-sm font-medium text-slate-900">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-slate-600">{description}</p>
+      <p className="mt-4 text-sm font-medium text-ink">{title}</p>
+      <p className="mt-1 max-w-sm text-[13px] leading-5 text-ink-soft">
+        {description}
+      </p>
       {action !== undefined && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -129,12 +141,12 @@ export function EmptyState({
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={cx("animate-pulse rounded-md bg-slate-200/70", className)}
+      className={cx("animate-pulse rounded-md bg-stone-200/70", className)}
     />
   );
 }
 
-/** The vendor's initial in a tinted tile, reused by the list and detail views. */
+/** The vendor's initial in a quiet tile, reused by the list and detail views. */
 export function InitialAvatar({
   name,
   className,
@@ -147,7 +159,7 @@ export function InitialAvatar({
   return (
     <span
       className={cx(
-        "grid shrink-0 place-items-center rounded-lg bg-indigo-50 font-semibold text-indigo-700",
+        "grid shrink-0 place-items-center rounded-[10px] border border-line bg-[#faf9f6] font-semibold text-stone-600",
         className,
       )}
       aria-hidden

@@ -14,7 +14,7 @@ const MONEY = /^-?\d+(?:\.\d{1,2})?$/;
 const CURRENCY = /^[A-Z]{3}$/;
 
 const INPUT =
-  "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none";
+  "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10";
 
 type Draft = {
   vendor_name: string;
@@ -76,7 +76,10 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <label htmlFor={id} className="block text-xs font-medium text-slate-700">
+      <label
+        htmlFor={id}
+        className="block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-stone-400"
+      >
         {label}
       </label>
       <input
@@ -174,10 +177,12 @@ export default function InvoiceFieldsForm({
     <form
       onSubmit={onSubmit}
       noValidate
-      className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm"
+      className="animate-rise rounded-2xl border border-indigo-200/70 bg-white p-4 shadow-[0_1px_2px_rgba(22,23,28,0.04),0_16px_36px_-26px_rgba(79,70,229,0.5)] sm:p-5"
     >
-      <p className="text-sm font-semibold text-slate-900">Correct the fields</p>
-      <p className="mt-0.5 text-xs text-slate-500">
+      <p className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+        Correct the fields
+      </p>
+      <p className="mt-1 text-[12px] leading-5 text-ink-soft">
         The numbers are checked again when you save. If they add up, the invoice
         leaves the review queue.
       </p>
@@ -245,15 +250,15 @@ export default function InvoiceFieldsForm({
       {error !== "" && (
         <p
           role="alert"
-          className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-700"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           {error}
         </p>
       )}
 
-      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-slate-500">
+      <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[11px] text-stone-500">
           Line items cannot be edited here.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">

@@ -98,7 +98,7 @@ function stats(overrides: Partial<InvoiceStats> = {}): InvoiceStats {
 
 /** The KPI card that owns a label, so assertions cannot match a stray number. */
 function kpi(label: string): HTMLElement {
-  const card = screen.getByText(label).closest("div.rounded-xl");
+  const card = screen.getByText(label).closest("div.rounded-2xl");
   if (card === null) throw new Error(`No KPI card for “${label}”`);
   return card as HTMLElement;
 }

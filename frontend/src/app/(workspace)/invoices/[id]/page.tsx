@@ -23,20 +23,25 @@ export default function InvoicePage({ params }: PageProps<"/invoices/[id]">) {
 function DetailSkeleton() {
   return (
     <div className="space-y-6">
-      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-3.5 w-28" />
       <div className="flex items-center gap-4">
-        <Skeleton className="h-12 w-12 rounded-xl" />
+        <Skeleton className="h-14 w-14 rounded-xl" />
         <div className="space-y-2">
           <Skeleton className="h-7 w-64" />
-          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3.5 w-40" />
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-24 rounded-xl" />
-        ))}
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-[74px] rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
+        <Skeleton className="h-[420px] rounded-2xl" />
       </div>
-      <Skeleton className="h-72 rounded-xl" />
     </div>
   );
 }

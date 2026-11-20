@@ -102,14 +102,14 @@ export function InvoiceListSkeleton() {
   return (
     <Card className="overflow-hidden">
       <span className="sr-only">Loading invoices…</span>
-      <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-        <Skeleton className="h-9 w-full max-w-sm" />
-        <Skeleton className="ml-auto h-4 w-20" />
+      <div className="border-b border-line px-4 py-4 sm:px-5">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="mt-2 h-3 w-20" />
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-line/70">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="flex items-center gap-4 px-4 py-4">
-            <Skeleton className="h-8 w-8 rounded-lg" />
+          <div key={index} className="flex items-center gap-3 px-4 py-4 sm:px-5">
+            <Skeleton className="h-9 w-9 rounded-[10px]" />
             <div className="space-y-1.5">
               <Skeleton className="h-3.5 w-40" />
               <Skeleton className="h-3 w-24" />
@@ -154,12 +154,12 @@ function SearchBox({
   }, [draft, value, onCommit]);
 
   return (
-    <div className="relative w-full sm:max-w-sm">
+    <div className="relative w-full sm:w-[240px] lg:w-[260px]">
       <label htmlFor="invoice-search" className="sr-only">
         Search invoices
       </label>
       <Search
-        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400"
         aria-hidden
       />
       <input
@@ -167,8 +167,8 @@ function SearchBox({
         type="search"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        placeholder="Search vendor or invoice number"
-        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none"
+        placeholder="Search vendor or number"
+        className="h-9 w-full rounded-lg border border-line bg-[#faf9f6] py-0 pl-9 pr-9 text-[13px] text-ink transition-colors placeholder:text-stone-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
       />
       {draft !== "" && (
         <button
@@ -178,11 +178,31 @@ function SearchBox({
             onCommit("");
           }}
           aria-label="Clear search"
-          className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
+          className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-stone-400 transition-colors hover:bg-stone-900/[0.06] hover:text-ink"
         >
           <X className="h-3.5 w-3.5" aria-hidden />
         </button>
       )}
+    </div>
+  );
+}
+
+/** One row's contents, shared by the desktop grid and the phone card. */
+function VendorCell({ invoice }: { invoice: InvoiceSummary }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <InitialAvatar
+        name={invoice.vendor_name}
+        className="h-9 w-9 text-[11px]"
+      />
+      <div className="min-w-0">
+        <p className="truncate text-[13.5px] font-medium tracking-[-0.005em] text-ink transition-colors group-hover:text-indigo-700">
+          {invoice.vendor_name ?? "Unknown vendor"}
+        </p>
+        <p className="mt-0.5 truncate text-[11.5px] text-stone-500">
+          {invoice.invoice_number ?? "No invoice number"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -351,68 +371,89 @@ export default function InvoiceList() {
     .join(" ")
     .concat(".");
 
+  const pageButton =
+    "grid h-8 w-8 place-items-center rounded-lg border border-line bg-white text-stone-600 transition-colors hover:bg-[#faf9f6] hover:text-ink disabled:pointer-events-none disabled:opacity-40";
+
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div className="flex w-full flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
-          <SearchBox value={filters.term} onCommit={commitTerm} />
-
-          <div className="relative w-full sm:w-44">
-            <label htmlFor="invoice-status" className="sr-only">
-              Filter by status
-            </label>
-            <select
-              id="invoice-status"
-              value={filters.status}
-              onChange={(event) =>
-                changeStatus(event.target.value as InvoiceStatus | "")
-              }
-              className="w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-sm text-slate-900 transition-colors focus:border-indigo-400 focus:bg-white focus:outline-none"
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
+      <div className="flex flex-col gap-3 border-b border-line px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
+              All invoices
+            </h2>
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10.5px] font-medium tabular-nums text-stone-600">
+              {data.total}
+            </span>
           </div>
+          <p className="mt-0.5 text-[11.5px] text-ink-soft">Newest first</p>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={exporting || data.total === 0}
-            title="Download these invoices as a CSV file"
-            className={buttonClass("secondary")}
-          >
-            {exporting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Download className="h-3.5 w-3.5" aria-hidden />
-            )}
-            {exporting ? "Exporting…" : "Export CSV"}
-          </button>
-          {pending && (
-            <span role="status" className="flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-              Updating…
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <SearchBox value={filters.term} onCommit={commitTerm} />
+
+          {/* On a phone the filter and the export share a row: three stacked
+              full-width controls made the list start below the fold. */}
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:w-[148px] sm:flex-none">
+              <label htmlFor="invoice-status" className="sr-only">
+                Filter by status
+              </label>
+              <select
+                id="invoice-status"
+                value={filters.status}
+                onChange={(event) =>
+                  changeStatus(event.target.value as InvoiceStatus | "")
+                }
+                className="h-9 w-full appearance-none rounded-lg border border-line bg-white py-0 pl-3 pr-8 text-[13px] text-ink transition-colors hover:border-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400"
+                aria-hidden
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={exporting || data.total === 0}
+              aria-label="Export CSV"
+              title="Download these invoices as a CSV file"
+              className={buttonClass("secondary")}
+            >
+              {exporting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Download className="h-3.5 w-3.5" aria-hidden />
+              )}
+              <span className="hidden min-[360px]:inline">
+                {exporting ? "Exporting…" : "Export CSV"}
+              </span>
+            </button>
+
+            {/* Fixed slot: the list must not jump when a request starts. */}
+            <span className="hidden w-16 text-[11px] text-ink-soft sm:block">
+              {pending && (
+                <span role="status" className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                  Updating
+                </span>
+              )}
             </span>
-          )}
-          <span className="tabular-nums">
-            {data.total} {data.total === 1 ? "invoice" : "invoices"}
-          </span>
+          </div>
         </div>
       </div>
 
       {exportError !== "" && (
         <p
           role="alert"
-          className="flex items-start gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700"
+          className="flex items-start gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-[11.5px] text-red-700 sm:px-5"
         >
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           {exportError}
@@ -468,32 +509,32 @@ export default function InvoiceList() {
       ) : (
         <>
           {/*
-            Phones get one tappable card per invoice. A five-column table
+            Phones get one tappable card per invoice. A multi-column table
             cannot fit 390px without pushing the total off-screen, which is
             exactly the number people look for first.
           */}
-          <ul className="divide-y divide-slate-100 sm:hidden">
+          <ul className="divide-y divide-line/70 sm:hidden">
             {data.items.map((invoice: InvoiceSummary) => (
               <li key={invoice.id}>
                 <Link
                   href={`/invoices/${invoice.id}`}
-                  className="flex items-center gap-3 px-4 py-3 active:bg-slate-50"
+                  className="group flex items-center gap-3 px-4 py-3.5 transition-colors active:bg-[#faf9f6]"
                 >
                   <InitialAvatar
                     name={invoice.vendor_name}
-                    className="h-9 w-9 text-xs"
+                    className="h-9 w-9 text-[11px]"
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-slate-900">
+                    <span className="block truncate text-[13.5px] font-medium text-ink">
                       {invoice.vendor_name ?? "Unknown vendor"}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-500">
+                    <span className="mt-0.5 block truncate text-[11.5px] text-stone-500">
                       {invoice.invoice_number ?? "—"} ·{" "}
                       {invoice.invoice_date ?? "no date"}
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="whitespace-nowrap text-sm font-medium tabular-nums text-slate-900">
+                    <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums tracking-[-0.01em] text-ink">
                       {formatMoney(invoice.total_amount, invoice.currency)}
                     </span>
                     <StatusBadge status={invoice.status} />
@@ -503,63 +544,47 @@ export default function InvoiceList() {
             ))}
           </ul>
 
-          <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="px-4 py-2.5 font-medium">Vendor</th>
-                  <th className="hidden px-4 py-2.5 font-medium md:table-cell">
-                    Invoice #
-                  </th>
-                  <th className="hidden px-4 py-2.5 font-medium md:table-cell">
-                    Date
-                  </th>
-                  <th className="px-4 py-2.5 text-right font-medium">Total</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.items.map((invoice: InvoiceSummary) => (
-                  <tr
-                    key={invoice.id}
-                    className="transition-colors hover:bg-slate-50/70"
+          {/* Desktop: the whole row is one link, so the target is the row. */}
+          <div className="hidden sm:block">
+            <div className="grid grid-cols-[minmax(0,1fr)_104px_104px_20px] gap-4 border-b border-line bg-[#faf9f6]/60 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 sm:px-5 md:grid-cols-[minmax(0,1fr)_104px_132px_104px_20px]">
+              <span>Vendor</span>
+              <span className="hidden md:block">Date</span>
+              <span className="text-right">Total</span>
+              <span>Status</span>
+              <span className="sr-only">Open</span>
+            </div>
+
+            <ul className="divide-y divide-line/70">
+              {data.items.map((invoice: InvoiceSummary) => (
+                <li key={invoice.id}>
+                  <Link
+                    href={`/invoices/${invoice.id}`}
+                    className="group grid grid-cols-[minmax(0,1fr)_104px_104px_20px] items-center gap-4 px-4 py-3.5 transition-colors hover:bg-[#faf9f6] sm:px-5 md:grid-cols-[minmax(0,1fr)_104px_132px_104px_20px]"
                   >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/invoices/${invoice.id}`}
-                        className="group flex min-w-0 items-center gap-3"
-                      >
-                        <InitialAvatar
-                          name={invoice.vendor_name}
-                          className="h-8 w-8 text-xs"
-                        />
-                        <span className="truncate font-medium text-slate-900 group-hover:text-indigo-700">
-                          {invoice.vendor_name ?? "Unknown vendor"}
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="hidden px-4 py-3 text-slate-600 md:table-cell">
-                      {invoice.invoice_number ?? "—"}
-                    </td>
-                    <td className="hidden px-4 py-3 text-slate-600 md:table-cell">
+                    <VendorCell invoice={invoice} />
+                    <span className="hidden text-[12.5px] tabular-nums text-ink-soft md:block">
                       {invoice.invoice_date ?? "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums text-slate-900">
+                    </span>
+                    <span className="whitespace-nowrap text-right text-[13.5px] font-semibold tabular-nums tracking-[-0.01em] text-ink">
                       {formatMoney(invoice.total_amount, invoice.currency)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    </span>
+                    <span>
                       <StatusBadge status={invoice.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                    <ChevronRight
+                      className="h-4 w-4 justify-self-end text-stone-300 transition-transform group-hover:translate-x-0.5 group-hover:text-stone-500"
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-        <p className="text-xs tabular-nums text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">
+        <p className="text-[11.5px] tabular-nums text-stone-500">
           {data.total === 0
             ? "No results"
             : `Showing ${first}–${last} of ${data.total}`}
@@ -571,11 +596,11 @@ export default function InvoiceList() {
             onClick={() => goToPage(Math.max(0, data.offset - PAGE_SIZE))}
             disabled={!hasPrevious || pending}
             aria-label="Previous page"
-            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className={pageButton}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden />
           </button>
-          <span className="px-2 text-xs tabular-nums text-slate-500">
+          <span className="px-2 text-[11.5px] tabular-nums text-ink-soft">
             Page {page} of {pageCount}
           </span>
           <button
@@ -583,7 +608,7 @@ export default function InvoiceList() {
             onClick={() => goToPage(data.offset + PAGE_SIZE)}
             disabled={!hasNext || pending}
             aria-label="Next page"
-            className="grid h-8 w-8 place-items-center rounded-md border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className={pageButton}
           >
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>

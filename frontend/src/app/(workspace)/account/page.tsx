@@ -9,6 +9,7 @@ export default function AccountPage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Settings"
         title="Account"
         description="The password that protects this workspace. Changing it needs the current one, so someone at an unlocked browser cannot lock you out."
       />

@@ -11,31 +11,21 @@ export const instant = false;
 
 export default function Home() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       <PageHeader
+        eyebrow="Workspace"
         title="Invoices"
         description="Upload a PDF and Gemini reads the vendor, line items and totals — then the arithmetic is checked before anything is trusted."
       />
 
       <UploadInvoice />
 
-      <section aria-labelledby="all-invoices">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2
-            id="all-invoices"
-            className="text-sm font-semibold text-slate-900"
-          >
-            All invoices
-          </h2>
-          <p className="text-xs text-slate-500">Newest first</p>
-        </div>
-        {/* useSearchParams needs a Suspense boundary: the list is the only
-            part of the page that depends on the query string, so the rest can
-            still be prerendered. */}
-        <Suspense fallback={<InvoiceListSkeleton />}>
-          <InvoiceList />
-        </Suspense>
-      </section>
+      {/* useSearchParams needs a Suspense boundary: the list is the only part
+          of the page that depends on the query string, so the rest can still be
+          prerendered. */}
+      <Suspense fallback={<InvoiceListSkeleton />}>
+        <InvoiceList />
+      </Suspense>
     </div>
   );
 }

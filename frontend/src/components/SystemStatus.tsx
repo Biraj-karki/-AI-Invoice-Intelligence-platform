@@ -30,16 +30,16 @@ export default function SystemStatus() {
   }, []);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+      <div className="flex items-center gap-2 text-[11px] font-medium text-white/65">
         <span
           className={cx(
-            "h-2 w-2 rounded-full",
+            "h-1.5 w-1.5 rounded-full",
             online === null
-              ? "bg-slate-300"
+              ? "bg-white/30"
               : online
-                ? "bg-emerald-500"
-                : "bg-red-500",
+                ? "bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.15)]"
+                : "bg-red-400",
           )}
           aria-hidden
         />
@@ -49,7 +49,7 @@ export default function SystemStatus() {
             ? "Backend online"
             : "Backend offline"}
       </div>
-      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+      <p className="mt-1 text-[10.5px] leading-4 text-white/30">
         Gemini extraction · PDF pipeline
       </p>
     </div>

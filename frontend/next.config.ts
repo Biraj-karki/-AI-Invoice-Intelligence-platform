@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
+  // The floating dev badge sits on top of the sidebar's status card, which is
+  // exactly the part of the UI a demo or a screenshot needs to show.
+  devIndicators: false,
   turbopack: {
     rules: {
       "*.css": {

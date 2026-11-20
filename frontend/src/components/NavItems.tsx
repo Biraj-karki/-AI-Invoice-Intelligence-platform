@@ -50,13 +50,13 @@ export function NavItems({
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className={cx(
-                "grid h-9 w-9 place-items-center rounded-lg",
+                "grid h-9 w-9 place-items-center rounded-lg transition-colors",
                 active
-                  ? "bg-slate-100 text-indigo-600"
-                  : "text-slate-500 hover:bg-slate-50",
+                  ? "bg-ink text-white shadow-sm"
+                  : "text-stone-500 hover:bg-stone-900/[0.06] hover:text-ink",
               )}
             >
-              <Icon className="h-4 w-4" aria-hidden />
+              <Icon className="h-[17px] w-[17px]" aria-hidden />
             </Link>
           );
         })}
@@ -65,37 +65,45 @@ export function NavItems({
   }
 
   return (
-    <nav className="flex-1 space-y-1 px-3">
-      <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+    <nav className="flex-1 px-3">
+      <p className="px-3 pb-2.5 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/30">
         Workspace
       </p>
-      {NAV.map((item) => {
-        const active = pathname !== null && item.isActive(pathname);
-        const Icon = item.icon;
+      <div className="space-y-0.5">
+        {NAV.map((item) => {
+          const active = pathname !== null && item.isActive(pathname);
+          const Icon = item.icon;
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cx(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-              active
-                ? "bg-slate-100 font-medium text-slate-900"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-            )}
-          >
-            <Icon
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cx(
-                "h-4 w-4",
-                active ? "text-indigo-600" : "text-slate-400",
+                "relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors",
+                active
+                  ? "bg-white/[0.07] font-medium text-white"
+                  : "text-white/55 hover:bg-white/[0.04] hover:text-white/90",
               )}
-              aria-hidden
-            />
-            {item.label}
-          </Link>
-        );
-      })}
+            >
+              {active && (
+                <span
+                  className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-indigo-400"
+                  aria-hidden
+                />
+              )}
+              <Icon
+                className={cx(
+                  "h-[17px] w-[17px]",
+                  active ? "text-indigo-300" : "text-white/35",
+                )}
+                aria-hidden
+              />
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

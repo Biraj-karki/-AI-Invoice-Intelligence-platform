@@ -34,7 +34,10 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-xs font-medium text-slate-700">
+      <label
+        htmlFor={id}
+        className="block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-stone-400"
+      >
         {label}
       </label>
       <input
@@ -45,7 +48,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={hint}
-        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+        className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
       />
     </div>
   );
@@ -107,15 +110,15 @@ export default function ChangePassword() {
 
   return (
     <Card className="max-w-xl">
-      <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
+      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100">
           <KeyRound className="h-4 w-4" aria-hidden />
         </span>
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">
+          <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">
             Change password
           </h2>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-[11.5px] leading-5 text-ink-soft">
             Your email stays the same. You&apos;ll stay signed in on this device.
           </p>
         </div>
@@ -152,12 +155,12 @@ export default function ChangePassword() {
           onChange={setConfirm}
         />
 
-        <label className="flex w-fit items-center gap-2 text-xs text-slate-600">
+        <label className="flex w-fit items-center gap-2 text-[11.5px] text-ink-soft">
           <input
             type="checkbox"
             checked={shown}
             onChange={(event) => setShown(event.target.checked)}
-            className="h-3.5 w-3.5 rounded border-slate-300 accent-indigo-600"
+            className="h-3.5 w-3.5 rounded border-stone-300 accent-indigo-600"
           />
           Show passwords
         </label>
@@ -165,7 +168,7 @@ export default function ChangePassword() {
         {error !== "" && (
           <p
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-700"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             {error}
@@ -175,15 +178,15 @@ export default function ChangePassword() {
         {done && (
           <p
             role="status"
-            className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"
+            className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[12.5px] text-emerald-700"
           >
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             Password changed. Use the new one the next time you sign in.
           </p>
         )}
 
-        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-center gap-1.5 text-xs text-slate-500">
+        <div className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-1.5 text-[11px] text-stone-500">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
             Stored as an Argon2id hash, never as text.
           </p>

@@ -83,10 +83,10 @@ export default function LoginForm() {
 
   return (
     <>
-      <h1 className="text-lg font-semibold tracking-tight text-slate-900">
+      <h1 className="text-[26px] leading-tight font-semibold tracking-[-0.03em] text-ink">
         {registering ? "Create your account" : "Sign in"}
       </h1>
-      <p className="mt-1 text-sm text-slate-600">
+      <p className="mt-1.5 text-[13px] leading-5 text-ink-soft">
         {registering
           ? "One account is enough for this workspace."
           : "Use the account you registered for this workspace."}
@@ -94,11 +94,11 @@ export default function LoginForm() {
 
       {/* noValidate: the messages below are ours, so every browser shows the
           same sentence instead of its own native bubble. */}
-      <form onSubmit={onSubmit} noValidate className="mt-5 space-y-4">
+      <form onSubmit={onSubmit} noValidate className="mt-6 space-y-4">
         <div>
           <label
             htmlFor="email"
-            className="block text-xs font-medium text-slate-700"
+            className="block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-stone-400"
           >
             Email
           </label>
@@ -109,7 +109,7 @@ export default function LoginForm() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+            className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-[13px] text-ink transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
             placeholder="you@company.com"
           />
         </div>
@@ -117,11 +117,11 @@ export default function LoginForm() {
         <div>
           <label
             htmlFor="password"
-            className="block text-xs font-medium text-slate-700"
+            className="block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-stone-400"
           >
             Password
           </label>
-          <div className="relative mt-1">
+          <div className="relative mt-1.5">
             <input
               id="password"
               type={showPassword ? "text" : "password"}
@@ -129,14 +129,14 @@ export default function LoginForm() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2.5 pr-10 text-[13px] text-ink transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
               placeholder={registering ? "At least 8 characters" : "Your password"}
             />
             <button
               type="button"
               onClick={() => setShowPassword((shown) => !shown)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-stone-400 transition-colors hover:bg-stone-900/[0.06] hover:text-ink"
             >
               {showPassword ? (
                 <EyeOff className="h-4 w-4" aria-hidden />
@@ -150,7 +150,7 @@ export default function LoginForm() {
         {error !== "" && (
           <p
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-700"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             {error}
@@ -181,12 +181,12 @@ export default function LoginForm() {
         </button>
       </form>
 
-      <p className="mt-4 text-center text-sm text-slate-600">
+      <p className="mt-5 text-center text-[12.5px] text-ink-soft">
         {registering ? "Already have an account?" : "First time here?"}{" "}
         <button
           type="button"
           onClick={() => switchMode(registering ? "login" : "register")}
-          className="font-medium text-indigo-600 hover:text-indigo-700"
+          className="font-medium text-indigo-600 transition-colors hover:text-indigo-700"
         >
           {registering ? "Sign in" : "Create an account"}
         </button>
