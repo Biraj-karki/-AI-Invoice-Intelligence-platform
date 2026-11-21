@@ -24,8 +24,8 @@ def _money(value: Decimal | None) -> Decimal:
     return value if value is not None else Decimal("0.00")
 
 
-def invoice_stats(db: Session) -> InvoiceStatsOut:
-    """Aggregate spend per currency, per vendor and per month.
+def invoice_stats(db: Session, *, owner_id: int) -> InvoiceStatsOut:
+    """Aggregate the caller's spend per currency, per vendor and per month.
 
     All three groupings are done in SQL; Python only reshapes the rows, so the
     database never ships every invoice to the app just to add them up.
@@ -34,6 +34,7 @@ def invoice_stats(db: Session) -> InvoiceStatsOut:
     vendor = func.coalesce(Invoice.vendor_name, UNKNOWN_VENDOR)
     month = func.to_char(Invoice.invoice_date, "YYYY-MM")
     counted = Invoice.status.in_(COUNTED_STATUSES)
+    owned = Invoice.owner_id == owner_id
     total = func.coalesce(func.sum(Invoice.total_amount), Decimal("0.00"))
 
     totals = db.execute(
@@ -42,7 +43,7 @@ def invoice_stats(db: Session) -> InvoiceStatsOut:
             func.count(Invoice.id).label("invoice_count"),
             total.label("total_amount"),
         )
-        .where(counted)
+        .where(owned, counted)
         .group_by(currency)
         .order_by(func.sum(Invoice.total_amount).desc())
     ).all()
@@ -54,7 +55,7 @@ def invoice_stats(db: Session) -> InvoiceStatsOut:
             func.count(Invoice.id).label("invoice_count"),
             total.label("total_amount"),
         )
-        .where(counted)
+        .where(owned, counted)
         .group_by(currency, vendor)
         .order_by(func.sum(Invoice.total_amount).desc())
     ).all()
@@ -66,18 +67,20 @@ def invoice_stats(db: Session) -> InvoiceStatsOut:
             func.count(Invoice.id).label("invoice_count"),
             total.label("total_amount"),
         )
-        .where(counted, Invoice.invoice_date.is_not(None))
+        .where(owned, counted, Invoice.invoice_date.is_not(None))
         .group_by(currency, month)
         .order_by(month)
     ).all()
 
     excluded_count = db.scalar(
-        select(func.count()).select_from(Invoice).where(Invoice.status.not_in(COUNTED_STATUSES))
+        select(func.count())
+        .select_from(Invoice)
+        .where(owned, Invoice.status.not_in(COUNTED_STATUSES))
     )
     undated_count = db.scalar(
         select(func.count())
         .select_from(Invoice)
-        .where(counted, Invoice.invoice_date.is_(None))
+        .where(owned, counted, Invoice.invoice_date.is_(None))
     )
 
     currencies: list[CurrencyStatsOut] = []

@@ -10,9 +10,8 @@ class User(Base):
     """An account that can sign in and use the API.
 
     Passwords are never stored: password_hash holds an Argon2 digest produced by
-    app.core.security. Invoices are not yet scoped per user (this is a single
-    shared workspace); the account exists so the API is not open to anyone who
-    can reach the port.
+    app.core.security. Each invoice belongs to the account that uploaded it
+    (Invoice.owner_id), so two accounts never see each other's documents.
     """
 
     __tablename__ = "users"

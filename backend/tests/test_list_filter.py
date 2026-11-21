@@ -5,6 +5,7 @@ COLLECTION = "/api/v1/invoices"
 
 def _add(db, status: str, vendor: str = "ACME", number: str = "INV-1") -> Invoice:
     invoice = Invoice(
+        owner_id=1,
         vendor_name=vendor,
         invoice_number=number,
         status=status,

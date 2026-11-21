@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
+from app.core.auth import get_current_user
 from app.core.config import BASE_DIR
 from app.db.session import get_db
-from app.models import Invoice
+from app.models import Invoice, User
 from app.schemas.extraction import (
     ExtractedText,
     InvoiceExtractionOut,
@@ -196,6 +197,7 @@ async def extract_invoice(file: UploadFile = File(...)) -> InvoiceExtractionOut:
 async def create_invoice(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Invoice:
     data = await _read_pdf(file)
     text = _text_or_422(_extract_pages_or_422(data))
@@ -210,6 +212,7 @@ async def create_invoice(
 
     return invoice_service.create_invoice(
         db,
+        owner_id=current_user.id,
         normalized=normalized,
         raw_extraction=extraction.model_dump(),
         source_filename=file.filename,
@@ -235,12 +238,14 @@ def list_invoices(
         description="Only return invoices in this lifecycle state",
     ),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> InvoiceListOut:
     # An empty or whitespace-only search is the same as no search at all.
     term = (q or "").strip()
 
     items, total = invoice_service.list_invoices(
         db,
+        owner_id=current_user.id,
         term=term,
         status=status_filter,
         limit=limit,
@@ -270,11 +275,14 @@ def export_invoices(
         description="Only export invoices in this lifecycle state",
     ),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
     """Every matching invoice, not just the page the browser is showing."""
     term = (q or "").strip()
 
-    invoices, _ = invoice_service.list_invoices(db, term=term, status=status_filter)
+    invoices, _ = invoice_service.list_invoices(
+        db, owner_id=current_user.id, term=term, status=status_filter
+    )
 
     filename = f"invoices-{date.today().isoformat()}.csv"
     return Response(
@@ -292,8 +300,11 @@ def export_invoices(
     response_model=InvoiceStatsOut,
     summary="Spend aggregates per currency, vendor and month",
 )
-def get_stats(db: Session = Depends(get_db)) -> InvoiceStatsOut:
-    return stats_service.invoice_stats(db)
+def get_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> InvoiceStatsOut:
+    return stats_service.invoice_stats(db, owner_id=current_user.id)
 
 
 @router.get(
@@ -301,8 +312,12 @@ def get_stats(db: Session = Depends(get_db)) -> InvoiceStatsOut:
     response_model=InvoiceDetailOut,
     summary="Get one saved invoice",
 )
-def get_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Invoice:
-    invoice = db.get(Invoice, invoice_id)
+def get_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Invoice:
+    invoice = invoice_service.get_invoice(db, invoice_id, current_user.id)
     if invoice is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
@@ -315,8 +330,12 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Invoice:
     response_class=FileResponse,
     summary="Stream the original PDF so it can be previewed",
 )
-def get_invoice_file(invoice_id: int, db: Session = Depends(get_db)) -> FileResponse:
-    invoice = db.get(Invoice, invoice_id)
+def get_invoice_file(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    invoice = invoice_service.get_invoice(db, invoice_id, current_user.id)
     if invoice is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
@@ -350,9 +369,15 @@ def resolve_invoice(
     invoice_id: int,
     payload: InvoiceResolutionIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Invoice:
     try:
-        invoice = invoice_service.resolve_invoice(db, invoice_id, payload.status)
+        invoice = invoice_service.resolve_invoice(
+            db,
+            owner_id=current_user.id,
+            invoice_id=invoice_id,
+            status=payload.status,
+        )
     except invoice_service.InvoiceStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
@@ -373,6 +398,7 @@ def correct_invoice_fields(
     invoice_id: int,
     payload: InvoiceFieldsIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Invoice:
     """Write the corrected values, then re-check whether the numbers add up.
 
@@ -382,10 +408,11 @@ def correct_invoice_fields(
     try:
         invoice = invoice_service.correct_invoice(
             db,
-            invoice_id,
+            owner_id=current_user.id,
+            invoice_id=invoice_id,
             # Only the fields actually sent: a PATCH that mentions the total
             # must not blank the vendor.
-            payload.model_dump(exclude_unset=True),
+            corrections=payload.model_dump(exclude_unset=True),
         )
     except invoice_service.InvoiceStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -403,7 +430,11 @@ def correct_invoice_fields(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an invoice and its stored PDF",
 )
-def delete_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
     """Remove the row and the file behind it.
 
     Any status can be deleted: the whole point is to clear out a bad upload or
@@ -412,7 +443,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)) -> Response:
     then is the file removed. A failed unlink therefore costs disk space, never
     an invoice whose PDF has vanished while the row survives.
     """
-    invoice = db.get(Invoice, invoice_id)
+    invoice = invoice_service.get_invoice(db, invoice_id, current_user.id)
     if invoice is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."

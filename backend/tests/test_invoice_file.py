@@ -17,6 +17,7 @@ def uploads(tmp_path, monkeypatch) -> Path:
 
 def _invoice(db_session, stored_path: str | None) -> Invoice:
     invoice = Invoice(
+        owner_id=1,
         vendor_name="ACME SUPPLIES PVT. LTD.",
         status="extracted",
         source_filename="sample invoice.pdf",

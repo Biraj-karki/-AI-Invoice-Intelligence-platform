@@ -17,6 +17,12 @@ from app.models import User
 # would fail the moment you upload one.
 TEST_SCHEMA = "pytest"
 
+# Every invoice belongs to an account. Tests share one persisted identity, so a
+# helper that builds an Invoice directly only has to say owner_id=1. Tests that
+# exercise isolation create a second user of their own.
+TEST_OWNER_ID = 1
+TEST_OWNER_EMAIL = "scoped-owner@example.com"
+
 
 @pytest.fixture(scope="session")
 def test_engine():
@@ -52,6 +58,24 @@ def db_session(test_engine):
     transaction = connection.begin()
     session = Session(bind=connection, join_transaction_mode="create_savepoint")
 
+    # The row is flushed, not committed; it disappears with the savepoint.
+    session.add(
+        User(
+            id=TEST_OWNER_ID,
+            email=TEST_OWNER_EMAIL,
+            password_hash="not-used-by-invoice-tests",
+            is_active=True,
+        )
+    )
+    session.flush()
+
+    # Giving the row an explicit id skips the id sequence, which would then hand
+    # out 1 again to the next real registration. Move it past the seeded owner.
+    session.execute(
+        text("SELECT setval(pg_get_serial_sequence('users', 'id'), :last)"),
+        {"last": TEST_OWNER_ID},
+    )
+
     try:
         yield session
     finally:
@@ -73,13 +97,11 @@ def api_client(db_session):
         yield db_session
 
     def override_current_user() -> User:
-        # A transient object: invoice endpoints never read it.
-        return User(
-            id=1,
-            email="test@example.com",
-            password_hash="not-used-by-invoice-tests",
-            is_active=True,
-        )
+        # The identity is real (it owns the invoices these tests create), but it
+        # is read from the test session instead of from a token.
+        user = db_session.get(User, TEST_OWNER_ID)
+        assert user is not None
+        return user
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user

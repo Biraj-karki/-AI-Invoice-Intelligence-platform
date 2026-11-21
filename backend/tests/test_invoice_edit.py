@@ -179,6 +179,7 @@ def test_clearing_the_total_keeps_the_invoice_in_review(
 
 def test_correcting_requires_a_token(anonymous_client, db_session) -> None:
     invoice = Invoice(
+        owner_id=1,
         vendor_name="Dodgy Co",
         subtotal=Decimal("100.00"),
         tax_amount=Decimal("10.00"),

@@ -33,8 +33,10 @@ def _like_pattern(term: str) -> str:
     return f"%{escaped}%"
 
 
-def _conditions(term: str, status: str | None) -> list:
-    conditions = []
+def _conditions(term: str, status: str | None, owner_id: int) -> list:
+    # Ownership is not optional: it is the first condition on every read, so a
+    # forgotten filter cannot leak another account's invoice.
+    conditions = [Invoice.owner_id == owner_id]
 
     if term:
         pattern = _like_pattern(term)
@@ -51,21 +53,37 @@ def _conditions(term: str, status: str | None) -> list:
     return conditions
 
 
+def get_invoice(db: Session, invoice_id: int, owner_id: int) -> Invoice | None:
+    """One invoice, but only if the caller owns it.
+
+    Returning None for someone else's invoice is deliberate: the API then
+    answers 404, the same as for an id that never existed, so one account
+    cannot probe for the existence of another account's documents.
+    """
+    return db.scalar(
+        select(Invoice).where(
+            Invoice.id == invoice_id,
+            Invoice.owner_id == owner_id,
+        )
+    )
+
+
 def list_invoices(
     db: Session,
     *,
+    owner_id: int,
     term: str = "",
     status: str | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> tuple[list[Invoice], int]:
-    """Return one page of invoices plus the size of the whole filtered set.
+    """Return one page of the caller's invoices plus the filtered total.
 
     The list endpoint and the CSV export both go through here, so a filter can
     never mean one thing on screen and another in the downloaded file.
     `limit=None` means "every match", which is what an export wants.
     """
-    conditions = _conditions(term, status)
+    conditions = _conditions(term, status, owner_id)
 
     # The total must describe the same filtered set as the page, otherwise the
     # client would show "page 1 of 5" for a search with one match.
@@ -87,6 +105,7 @@ def list_invoices(
 def create_invoice(
     db: Session,
     *,
+    owner_id: int,
     normalized: NormalizedInvoice,
     raw_extraction: dict,
     source_filename: str | None,
@@ -97,6 +116,7 @@ def create_invoice(
     A single commit means a failure cannot leave an invoice without its rows.
     """
     invoice = Invoice(
+        owner_id=owner_id,
         vendor_name=normalized.vendor_name,
         invoice_number=normalized.invoice_number,
         invoice_date=normalized.invoice_date,
@@ -128,16 +148,19 @@ def create_invoice(
 
 def resolve_invoice(
     db: Session,
+    *,
+    owner_id: int,
     invoice_id: int,
     status: str,
 ) -> Invoice | None:
     """Approve or reject an invoice that is waiting for review.
 
-    Returns None when the invoice does not exist, so the caller can answer 404.
-    Raises InvoiceStateError when the transition is not allowed, so the caller
-    can answer 409 rather than silently overwriting an already-final status.
+    Returns None when the invoice does not exist or belongs to another account,
+    so the caller can answer 404. Raises InvoiceStateError when the transition
+    is not allowed, so the caller can answer 409 rather than silently
+    overwriting an already-final status.
     """
-    invoice = db.get(Invoice, invoice_id)
+    invoice = get_invoice(db, invoice_id, owner_id)
     if invoice is None:
         return None
 
@@ -155,6 +178,8 @@ def resolve_invoice(
 
 def correct_invoice(
     db: Session,
+    *,
+    owner_id: int,
     invoice_id: int,
     corrections: dict[str, object],
 ) -> Invoice | None:
@@ -169,7 +194,7 @@ def correct_invoice(
     be a lie. When nothing is left to complain about, the invoice stops asking
     for review and becomes a normal extracted invoice.
     """
-    invoice = db.get(Invoice, invoice_id)
+    invoice = get_invoice(db, invoice_id, owner_id)
     if invoice is None:
         return None
 

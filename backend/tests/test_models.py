@@ -11,6 +11,7 @@ from app.models import Invoice, LineItem
 def test_invoice_and_line_items_round_trip(db_session) -> None:
     """Insert an invoice with a child row and read it back."""
     invoice = Invoice(
+        owner_id=1,
         vendor_name="Acme Supplies",
         invoice_number="INV-1001",
         currency="USD",
@@ -45,7 +46,7 @@ def test_invoice_and_line_items_round_trip(db_session) -> None:
 
 
 def test_deleting_invoice_deletes_its_line_items(db_session) -> None:
-    invoice = Invoice(vendor_name="Temp Co", status="pending")
+    invoice = Invoice(owner_id=1, vendor_name="Temp Co", status="pending")
     invoice.line_items = [LineItem(description="One-off")]
     db_session.add(invoice)
     db_session.flush()

@@ -17,6 +17,7 @@ def _add(
     total: str = "6130.25",
 ) -> Invoice:
     invoice = Invoice(
+        owner_id=1,
         vendor_name=vendor,
         invoice_number=number,
         invoice_date="2026-10-15",

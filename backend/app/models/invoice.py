@@ -16,6 +16,12 @@ class Invoice(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
+    # The account that uploaded this invoice. Every query filters on it, so one
+    # account can never read, export or delete another account's documents.
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+
     vendor_name: Mapped[str | None] = mapped_column(String(255))
     invoice_number: Mapped[str | None] = mapped_column(String(64), index=True)
     invoice_date: Mapped[date | None] = mapped_column(Date)

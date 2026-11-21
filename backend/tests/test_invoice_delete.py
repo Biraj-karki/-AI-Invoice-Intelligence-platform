@@ -107,7 +107,7 @@ def test_deleting_an_unknown_invoice_is_a_404(api_client) -> None:
 
 
 def test_deleting_requires_a_token(anonymous_client, db_session) -> None:
-    invoice = Invoice(vendor_name="Kept Co", status="extracted")
+    invoice = Invoice(owner_id=1, vendor_name="Kept Co", status="extracted")
     db_session.add(invoice)
     db_session.commit()
 
@@ -125,7 +125,12 @@ def test_a_file_outside_the_upload_directory_is_not_deleted(
     outside = tmp_path / "important.pdf"
     outside.write_bytes(b"%PDF-1.4 not ours")
 
-    invoice = Invoice(vendor_name="Tampered Co", stored_path=str(outside), status="extracted")
+    invoice = Invoice(
+        owner_id=1,
+        vendor_name="Tampered Co",
+        stored_path=str(outside),
+        status="extracted",
+    )
     db_session.add(invoice)
     db_session.commit()
 
@@ -138,6 +143,7 @@ def test_a_file_outside_the_upload_directory_is_not_deleted(
 
 def test_an_invoice_without_a_file_still_deletes(db_session, api_client) -> None:
     invoice = Invoice(
+        owner_id=1,
         vendor_name="Demo Co",
         subtotal=Decimal("100.00"),
         total_amount=Decimal("100.00"),

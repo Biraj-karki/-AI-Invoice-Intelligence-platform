@@ -19,6 +19,7 @@ def _add(
     status: str = "extracted",
 ) -> Invoice:
     invoice = Invoice(
+        owner_id=1,
         vendor_name=vendor,
         currency=currency,
         total_amount=Decimal(amount),

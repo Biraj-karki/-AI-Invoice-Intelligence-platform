@@ -1,9 +1,14 @@
 """Seed the development database with demo invoices for the dashboard.
 
 Re-runnable: it first deletes the rows it created last time (recognised by
-source_filename) and leaves every other invoice alone.
+source_filename) for the same account, and leaves every other invoice alone.
 
     python scripts/seed_demo_invoices.py
+    python scripts/seed_demo_invoices.py --email you@example.com
+    python scripts/seed_demo_invoices.py --clear
+
+The demo rows belong to one account, because invoices are private per account.
+Without --email the oldest account is used.
 """
 import sys
 from datetime import date
@@ -15,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import delete, func, select
 
 from app.db.session import SessionLocal
-from app.models import Invoice, LineItem
+from app.models import Invoice, LineItem, User
 
 DEMO_SOURCE = "demo-seed.pdf"
 
@@ -73,20 +78,59 @@ def _split(subtotal: Decimal, index: int) -> list[LineItem]:
     ]
 
 
+def _arg_value(flag: str) -> str | None:
+    """Read `--flag value` from the command line, if it was given."""
+    if flag not in sys.argv:
+        return None
+    index = sys.argv.index(flag) + 1
+    if index >= len(sys.argv):
+        sys.exit(f"{flag} needs a value, for example {flag} you@example.com")
+    return sys.argv[index]
+
+
+def _resolve_owner(db) -> User:
+    """The account the demo rows belong to: --email, else the oldest account."""
+    email = _arg_value("--email")
+    if email:
+        owner = db.scalar(
+            select(User).where(func.lower(User.email) == email.strip().lower())
+        )
+        if owner is None:
+            sys.exit(f"no account with email {email}. Register it first.")
+        return owner
+
+    owner = db.scalar(select(User).order_by(User.created_at, User.id).limit(1))
+    if owner is None:
+        sys.exit(
+            "no account exists yet. Register in the app first, or pass "
+            "--email you@example.com."
+        )
+    return owner
+
+
 def main() -> None:
     db = SessionLocal()
     try:
+        owner = _resolve_owner(db)
+        # Only this account's previous demo rows are replaced: the same seed run
+        # must never delete another account's invoices.
         removed = db.execute(
-            delete(Invoice).where(Invoice.source_filename == DEMO_SOURCE)
+            delete(Invoice).where(
+                Invoice.source_filename == DEMO_SOURCE,
+                Invoice.owner_id == owner.id,
+            )
         ).rowcount
         db.commit()
 
         if "--clear" in sys.argv:
-            print(f"removed {removed} demo invoice(s); nothing was added (--clear)")
+            print(
+                f"removed {removed} demo invoice(s) from {owner.email}; "
+                "nothing was added (--clear)"
+            )
             return
 
         if removed:
-            print(f"removed {removed} previous demo invoice(s)")
+            print(f"removed {removed} previous demo invoice(s) from {owner.email}")
 
         for index, (vendor, number, issued, currency, subtotal, tax, status) in enumerate(
             DEMO_ROWS
@@ -94,6 +138,7 @@ def main() -> None:
             sub = Decimal(subtotal)
             tax_amount = Decimal(tax)
             invoice = Invoice(
+                owner_id=owner.id,
                 vendor_name=vendor,
                 invoice_number=number,
                 invoice_date=issued,
@@ -116,10 +161,16 @@ def main() -> None:
         db.commit()
 
         first_id = db.scalar(
-            select(func.min(Invoice.id)).where(Invoice.source_filename == DEMO_SOURCE)
+            select(func.min(Invoice.id)).where(
+                Invoice.source_filename == DEMO_SOURCE,
+                Invoice.owner_id == owner.id,
+            )
         )
-        print(f"seeded {len(DEMO_ROWS)} demo invoices (source={DEMO_SOURCE})")
-        print(f"your other invoices were not touched (first demo id: {first_id})")
+        print(
+            f"seeded {len(DEMO_ROWS)} demo invoices for {owner.email} "
+            f"(source={DEMO_SOURCE})"
+        )
+        print(f"other accounts were not touched (first demo id: {first_id})")
     finally:
         db.close()
 
