@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from sqlalchemy import select
 
+from app.api.v1 import auth as auth_module
 from app.core.config import get_settings
 from app.models import User
 
@@ -73,6 +74,21 @@ def test_register_rejects_a_duplicate_email_regardless_of_case(
 def test_register_validates_email_and_password_length(anonymous_client) -> None:
     assert _register(anonymous_client, email="not-an-email").status_code == 422
     assert _register(anonymous_client, password="short").status_code == 422
+
+
+def test_registration_can_be_closed(anonymous_client, db_session, monkeypatch) -> None:
+    """A deployed instance must be able to refuse strangers outright."""
+    closed = get_settings().model_copy(update={"allow_registration": False})
+    monkeypatch.setattr(auth_module, "get_settings", lambda: closed)
+
+    response = _register(anonymous_client)
+
+    assert response.status_code == 403
+    assert "Registration is closed" in response.json()["detail"]
+    assert (
+        db_session.scalar(select(User).where(User.email == "owner@example.com"))
+        is None
+    )
 
 
 def test_login_returns_a_working_token(anonymous_client) -> None:

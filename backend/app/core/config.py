@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 60 * 24  # one day
 
+    # Open registration is convenient while building and a liability once the
+    # app is online. Set ALLOW_REGISTRATION=false when your own account exists:
+    # new accounts then have to be created by an operator, not by a stranger.
+    allow_registration: bool = True
+
     # Never commit this. Empty by default so the app can start without AI features.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"

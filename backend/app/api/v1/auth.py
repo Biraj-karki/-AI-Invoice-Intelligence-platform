@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
+from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -33,6 +34,14 @@ def _token_for(user: User) -> TokenOut:
     summary="Create an account and sign in",
 )
 def register(payload: CredentialsIn, db: Session = Depends(get_db)) -> TokenOut:
+    # Checked before anything else so a closed instance does not reveal which
+    # emails already have accounts.
+    if not get_settings().allow_registration:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Registration is closed. Ask the operator to create your account.",
+        )
+
     # Emails are compared lowercase, so "A@x.com" and "a@x.com" cannot both work.
     email = payload.email.lower()
 
