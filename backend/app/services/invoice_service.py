@@ -1,13 +1,14 @@
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Invoice, LineItem
+from app.models import Invoice, LineItem, User
 from app.services.normalize import NormalizedInvoice, reconcile_issues
 
 STATUS_EXTRACTED = "extracted"
 STATUS_NEEDS_REVIEW = "review"
 STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
+DUPLICATE_ISSUE = "Possible duplicate detected."
 
 # Only an invoice that is actually waiting for a decision can be resolved.
 RESOLVABLE_FROM = frozenset({STATUS_NEEDS_REVIEW})
@@ -68,6 +69,48 @@ def get_invoice(db: Session, invoice_id: int, owner_id: int) -> Invoice | None:
     )
 
 
+def _find_duplicate(
+    db: Session,
+    *,
+    owner_id: int,
+    normalized: NormalizedInvoice,
+    content_hash: str,
+) -> tuple[int, str] | None:
+    """Find the earliest same-account match, preferring identical file bytes."""
+    duplicate = db.scalar(
+        select(Invoice)
+        .where(
+            Invoice.owner_id == owner_id,
+            Invoice.content_hash == content_hash,
+        )
+        .order_by(Invoice.id)
+        .limit(1)
+    )
+    if duplicate is not None:
+        return duplicate.duplicate_of_id or duplicate.id, "same_file"
+
+    vendor_name = (normalized.vendor_name or "").strip()
+    invoice_number = (normalized.invoice_number or "").strip()
+    if not vendor_name or not invoice_number:
+        return None
+
+    duplicate = db.scalar(
+        select(Invoice)
+        .where(
+            Invoice.owner_id == owner_id,
+            func.lower(func.trim(Invoice.vendor_name)) == vendor_name.lower(),
+            func.lower(func.trim(Invoice.invoice_number))
+            == invoice_number.lower(),
+        )
+        .order_by(Invoice.id)
+        .limit(1)
+    )
+    if duplicate is None:
+        return None
+
+    return duplicate.duplicate_of_id or duplicate.id, "invoice_details"
+
+
 def list_invoices(
     db: Session,
     *,
@@ -110,13 +153,33 @@ def create_invoice(
     raw_extraction: dict,
     source_filename: str | None,
     stored_path: str | None,
+    storage_provider: str,
+    content_hash: str,
 ) -> Invoice:
     """Persist one invoice and its line items in a single transaction.
 
     A single commit means a failure cannot leave an invoice without its rows.
     """
+    # Serialize uploads for one account so simultaneous n8n retries cannot
+    # both miss a match that the other request is about to insert.
+    db.execute(select(User.id).where(User.id == owner_id).with_for_update())
+    duplicate = _find_duplicate(
+        db,
+        owner_id=owner_id,
+        normalized=normalized,
+        content_hash=content_hash,
+    )
+    duplicate_of_id = duplicate[0] if duplicate is not None else None
+    duplicate_match = duplicate[1] if duplicate is not None else None
+    issues = list(normalized.issues)
+    if duplicate_of_id is not None and duplicate_match is not None:
+        issues.append(DUPLICATE_ISSUE)
+
     invoice = Invoice(
         owner_id=owner_id,
+        content_hash=content_hash,
+        duplicate_of_id=duplicate_of_id,
+        duplicate_match=duplicate_match,
         vendor_name=normalized.vendor_name,
         invoice_number=normalized.invoice_number,
         invoice_date=normalized.invoice_date,
@@ -124,10 +187,11 @@ def create_invoice(
         subtotal=normalized.subtotal,
         tax_amount=normalized.tax_amount,
         total_amount=normalized.total_amount,
-        status=STATUS_NEEDS_REVIEW if normalized.issues else STATUS_EXTRACTED,
+        status=STATUS_NEEDS_REVIEW if issues else STATUS_EXTRACTED,
         source_filename=source_filename,
         stored_path=stored_path,
-        issues=list(normalized.issues),
+        storage_provider=storage_provider,
+        issues=issues,
         raw_extraction=raw_extraction,
         line_items=[
             LineItem(
@@ -215,6 +279,8 @@ def correct_invoice(
         total=invoice.total_amount,
         item_amounts=[item.amount for item in invoice.line_items],
     )
+    if invoice.duplicate_of_id is not None and invoice.duplicate_match is not None:
+        issues.append(DUPLICATE_ISSUE)
 
     invoice.issues = issues
     invoice.status = STATUS_NEEDS_REVIEW if issues else STATUS_EXTRACTED

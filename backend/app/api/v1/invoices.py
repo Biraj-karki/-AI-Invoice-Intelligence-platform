@@ -1,12 +1,15 @@
+import hashlib
+import logging
 from pathlib import Path
 from datetime import date
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_current_user
+from app.core.auth import get_automation_user, get_current_user
 from app.core.config import BASE_DIR
 from app.db.session import get_db
 from app.models import Invoice, User
@@ -32,8 +35,13 @@ from app.services import (
 from app.services.normalize import NormalizedInvoice, normalize_invoice
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+automation_router = APIRouter(
+    prefix="/automation/invoices",
+    tags=["automation"],
+)
 
 PREVIEW_CHARS = 300
+logger = logging.getLogger(__name__)
 
 
 async def _read_pdf(file: UploadFile) -> bytes:
@@ -199,6 +207,28 @@ async def create_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Invoice:
+    return await _create_invoice_for_user(file, db, current_user)
+
+
+@automation_router.post(
+    "",
+    response_model=InvoiceDetailOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload an invoice from an automation workflow",
+)
+async def create_automation_invoice(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_automation_user),
+) -> Invoice:
+    return await _create_invoice_for_user(file, db, current_user)
+
+
+async def _create_invoice_for_user(
+    file: UploadFile,
+    db: Session,
+    current_user: User,
+) -> Invoice:
     data = await _read_pdf(file)
     text = _text_or_422(_extract_pages_or_422(data))
 
@@ -208,7 +238,16 @@ async def create_invoice(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
 
     normalized = normalize_invoice(extraction)
-    stored_path = pdf_service.save_upload(data)
+    try:
+        stored_upload = pdf_service.save_invoice_upload(data)
+    except pdf_service.StorageError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The invoice PDF could not be stored.",
+        ) from exc
+    stored_path = stored_upload.identifier
+    if stored_upload.provider == "local":
+        stored_path = _relative_stored_path(Path(stored_path))
 
     return invoice_service.create_invoice(
         db,
@@ -216,7 +255,9 @@ async def create_invoice(
         normalized=normalized,
         raw_extraction=extraction.model_dump(),
         source_filename=file.filename,
-        stored_path=_relative_stored_path(stored_path),
+        stored_path=stored_path,
+        storage_provider=stored_upload.provider,
+        content_hash=hashlib.sha256(data).hexdigest(),
     )
 
 
@@ -334,11 +375,40 @@ def get_invoice_file(
     invoice_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> FileResponse:
+) -> Response:
     invoice = invoice_service.get_invoice(db, invoice_id, current_user.id)
     if invoice is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
+        )
+
+    if invoice.storage_provider == "cloudinary" and invoice.stored_path:
+        try:
+            data = pdf_service.read_cloudinary_upload(invoice.stored_path)
+        except pdf_service.InvalidStoredAsset as exc:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "No stored PDF is available for this invoice.",
+            ) from exc
+        except pdf_service.StorageError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                "The stored PDF could not be retrieved.",
+            ) from exc
+
+        filename = invoice.source_filename or f"invoice-{invoice.id}.pdf"
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename, safe='')}"
+            },
+        )
+
+    if invoice.storage_provider != "local":
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No stored PDF is available for this invoice.",
         )
 
     path = _resolve_stored_pdf(invoice.stored_path)
@@ -449,7 +519,11 @@ def delete_invoice(
             status.HTTP_404_NOT_FOUND, f"Invoice {invoice_id} does not exist."
         )
 
-    path = _resolve_stored_pdf(invoice.stored_path)
+    path = (
+        _resolve_stored_pdf(invoice.stored_path)
+        if invoice.storage_provider == "local"
+        else None
+    )
 
     # Line items go with it: the relationship cascades, and the foreign key has
     # ON DELETE CASCADE as a second line of defence.
@@ -460,8 +534,17 @@ def delete_invoice(
         try:
             path.unlink()
         except OSError:
-            # Already gone or locked by another program. The invoice is, which
-            # is what the user asked for.
-            pass
+            logger.exception(
+                "Could not remove local invoice PDF after deleting invoice %s",
+                invoice_id,
+            )
+    elif invoice.storage_provider == "cloudinary" and invoice.stored_path:
+        try:
+            pdf_service.delete_cloudinary_upload(invoice.stored_path)
+        except pdf_service.StorageError:
+            logger.exception(
+                "Could not remove Cloudinary PDF after deleting invoice %s",
+                invoice_id,
+            )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

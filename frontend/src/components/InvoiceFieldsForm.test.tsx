@@ -26,6 +26,8 @@ function makeInvoice(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
     tax_amount: "10.00",
     source_filename: "sample.pdf",
     stored_path: "storage/uploads/abc.pdf",
+    duplicate_of_id: null,
+    duplicate_match: null,
     issues: ["subtotal + tax = 110.00 but total is 500.00"],
     line_items: [],
     ...overrides,

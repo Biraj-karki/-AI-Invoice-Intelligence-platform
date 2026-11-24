@@ -176,3 +176,24 @@ def test_upload_belongs_to_the_account_that_sent_it(
     # The account that did not upload it still sees an empty workspace.
     _sign_in_as(db_session.get(User, 1))
     assert api_client.get(COLLECTION).json()["total"] == 0
+
+
+def test_duplicate_detection_does_not_cross_account_boundaries(
+    api_client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(gemini_service, "extract_invoice", _clean_extraction)
+    original = api_client.post(
+        COLLECTION,
+        files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
+    )
+    assert original.status_code == 201
+
+    _sign_in_as(_other_user(db_session))
+    separate_account = api_client.post(
+        COLLECTION,
+        files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
+    )
+
+    assert separate_account.status_code == 201
+    assert separate_account.json()["status"] == "extracted"
+    assert separate_account.json()["duplicate_of_id"] is None

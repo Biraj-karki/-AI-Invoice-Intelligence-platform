@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from app.core.auth import get_current_user
 from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
+    hash_automation_token,
     hash_password,
     verify_dummy_password,
     verify_password,
@@ -14,6 +17,8 @@ from app.db.session import get_db
 from app.models import User
 from app.schemas.auth import (
     CredentialsIn,
+    AutomationTokenOut,
+    AutomationTokenStatusOut,
     LoginIn,
     PasswordChangeIn,
     TokenOut,
@@ -84,6 +89,46 @@ def login(payload: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
 @router.get("/me", response_model=UserOut, summary="The signed-in account")
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.get(
+    "/automation-token",
+    response_model=AutomationTokenStatusOut,
+    summary="Check whether invoice automation is connected",
+)
+def automation_token_status(
+    user: User = Depends(get_current_user),
+) -> AutomationTokenStatusOut:
+    return AutomationTokenStatusOut(enabled=user.automation_token_hash is not None)
+
+
+@router.post(
+    "/automation-token",
+    response_model=AutomationTokenOut,
+    summary="Create or rotate the invoice automation token",
+)
+def create_automation_token(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AutomationTokenOut:
+    token = f"inv_auto_{secrets.token_urlsafe(32)}"
+    user.automation_token_hash = hash_automation_token(token)
+    db.commit()
+    return AutomationTokenOut(automation_token=token)
+
+
+@router.delete(
+    "/automation-token",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoke the invoice automation token",
+)
+def revoke_automation_token(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    user.automation_token_hash = None
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

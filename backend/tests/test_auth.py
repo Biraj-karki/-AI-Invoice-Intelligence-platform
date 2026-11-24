@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.api.v1 import auth as auth_module
 from app.core.config import get_settings
+from app.core.security import hash_automation_token
 from app.models import User
 
 AUTH = "/api/v1/auth"
@@ -174,3 +175,50 @@ def test_the_invoice_list_works_with_a_real_token(anonymous_client) -> None:
     )
 
     assert response.status_code == 200
+
+
+def test_automation_token_is_hashed_rotated_and_revoked(
+    anonymous_client, db_session
+) -> None:
+    access_token = _register(anonymous_client).json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {access_token}"}
+
+    status_response = anonymous_client.get(
+        f"{AUTH}/automation-token", headers=auth_headers
+    )
+    assert status_response.status_code == 200
+    assert status_response.json() == {"enabled": False}
+
+    first = anonymous_client.post(
+        f"{AUTH}/automation-token", headers=auth_headers
+    ).json()["automation_token"]
+    assert first.startswith("inv_auto_")
+    assert (
+        anonymous_client.get(
+            INVOICES,
+            headers={"X-Automation-Token": first},
+        ).status_code
+        == 401
+    )
+    assert anonymous_client.get(
+        f"{AUTH}/automation-token", headers=auth_headers
+    ).json() == {"enabled": True}
+
+    user = db_session.scalar(select(User).where(User.email == "owner@example.com"))
+    assert user is not None
+    assert user.automation_token_hash == hash_automation_token(first)
+
+    second = anonymous_client.post(
+        f"{AUTH}/automation-token", headers=auth_headers
+    ).json()["automation_token"]
+    assert second != first
+
+    revoked = anonymous_client.delete(
+        f"{AUTH}/automation-token", headers=auth_headers
+    )
+    assert revoked.status_code == 204
+    assert anonymous_client.get(
+        f"{AUTH}/automation-token", headers=auth_headers
+    ).json() == {"enabled": False}
+    db_session.refresh(user)
+    assert user.automation_token_hash is None

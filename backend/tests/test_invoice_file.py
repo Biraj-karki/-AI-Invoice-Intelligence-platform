@@ -117,3 +117,26 @@ def test_a_directory_instead_of_a_file_is_404(uploads, api_client, db_session) -
     response = api_client.get(f"/api/v1/invoices/{invoice.id}/file")
 
     assert response.status_code == 404
+
+
+def test_cloudinary_pdf_is_proxied_as_an_inline_file(
+    api_client, db_session, monkeypatch
+) -> None:
+    invoice = _invoice(
+        db_session,
+        "invoice-pdfs/0123456789abcdef0123456789abcdef.pdf",
+    )
+    invoice.storage_provider = "cloudinary"
+    db_session.commit()
+    monkeypatch.setattr(
+        pdf_service,
+        "read_cloudinary_upload",
+        lambda public_id: FIXTURE.read_bytes(),
+    )
+
+    response = api_client.get(f"/api/v1/invoices/{invoice.id}/file")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"].startswith("inline;")
+    assert response.content == FIXTURE.read_bytes()

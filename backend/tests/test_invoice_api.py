@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 
-from app.models import Invoice, LineItem
+from app.models import Invoice, LineItem, User
 from app.schemas.extraction import ExtractedLineItem, InvoiceExtraction
 from app.services import gemini_service, pdf_service
 
@@ -38,10 +38,20 @@ def _inconsistent_extraction(*args, **kwargs) -> InvoiceExtraction:
     )
 
 
-def _upload(client, filename: str = "sample_invoice.pdf"):
+def _upload(
+    client,
+    filename: str = "sample_invoice.pdf",
+    data: bytes | None = None,
+):
     return client.post(
         COLLECTION,
-        files={"file": (filename, FIXTURE.read_bytes(), "application/pdf")},
+        files={
+            "file": (
+                filename,
+                FIXTURE.read_bytes() if data is None else data,
+                "application/pdf",
+            )
+        },
     )
 
 
@@ -91,6 +101,81 @@ def test_create_invoice_flags_inconsistent_totals_for_review(
     assert invoice is not None
     assert invoice.status == "review"
     assert invoice.issues
+
+
+def test_identical_pdf_is_saved_as_a_duplicate_for_review(
+    api_client, db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(gemini_service, "extract_invoice", _consistent_extraction)
+
+    original = _upload(api_client).json()
+    duplicate = _upload(api_client).json()
+
+    assert duplicate["status"] == "review"
+    assert duplicate["duplicate_of_id"] == original["id"]
+    assert duplicate["duplicate_match"] == "same_file"
+    assert "Possible duplicate detected." in duplicate["issues"]
+
+    stored = db_session.get(Invoice, duplicate["id"])
+    assert stored is not None
+    assert stored.content_hash == db_session.get(Invoice, original["id"]).content_hash
+
+
+def test_automation_token_upload_creates_invoice_for_its_account(
+    api_client, db_session, monkeypatch
+) -> None:
+    from app.core.security import hash_automation_token
+
+    monkeypatch.setattr(gemini_service, "extract_invoice", _consistent_extraction)
+    token = "inv_auto_test-token"
+    owner = db_session.get(User, 1)
+    assert owner is not None
+    owner.automation_token_hash = hash_automation_token(token)
+    db_session.commit()
+
+    response = api_client.post(
+        "/api/v1/automation/invoices",
+        headers={"X-Automation-Token": token},
+        files={"file": ("sample_invoice.pdf", FIXTURE.read_bytes(), "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    invoice = db_session.get(Invoice, response.json()["id"])
+    assert invoice is not None
+    assert invoice.owner_id == owner.id
+
+
+def test_same_vendor_and_invoice_number_with_different_pdf_is_flagged(
+    api_client, monkeypatch
+) -> None:
+    monkeypatch.setattr(gemini_service, "extract_invoice", _consistent_extraction)
+    original = _upload(api_client).json()
+    different_bytes = FIXTURE.read_bytes() + b"\n% alternate PDF serialization"
+
+    duplicate = _upload(api_client, data=different_bytes).json()
+
+    assert duplicate["status"] == "review"
+    assert duplicate["duplicate_of_id"] == original["id"]
+    assert duplicate["duplicate_match"] == "invoice_details"
+    assert "Possible duplicate detected." in duplicate["issues"]
+
+
+def test_correcting_a_duplicate_does_not_clear_its_duplicate_warning(
+    api_client, monkeypatch
+) -> None:
+    monkeypatch.setattr(gemini_service, "extract_invoice", _consistent_extraction)
+    _upload(api_client)
+    duplicate = _upload(api_client).json()
+
+    response = api_client.patch(
+        f"{COLLECTION}/{duplicate['id']}/fields",
+        json={"invoice_number": "INV-2026-0042"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "review"
+    assert response.json()["duplicate_of_id"] is not None
+    assert "Possible duplicate detected." in response.json()["issues"]
 
 
 def test_failed_extraction_writes_nothing(api_client, db_session, monkeypatch, tmp_path) -> None:

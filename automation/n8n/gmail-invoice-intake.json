@@ -1,0 +1,132 @@
+{
+  "name": "Gmail invoice PDF intake",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment filename:pdf",
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      },
+      "id": "16cfb5ae-8fa6-4f3a-b797-c30fe88fa013",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const output = [];\nconst items = $input.all();\n\nfor (let itemIndex = 0; itemIndex < items.length; itemIndex++) {\n  const item = items[itemIndex];\n  const messageId = item.json.id || item.json.messageId;\n  if (typeof messageId !== 'string' || !messageId) {\n    throw new Error('Gmail message is missing its message ID.');\n  }\n\n  const attachments = Object.entries(item.binary ?? {}).filter(([, attachment]) =>\n    attachment.fileName?.toLowerCase().endsWith('.pdf') || attachment.mimeType === 'application/pdf'\n  );\n  if (attachments.length === 0) {\n    throw new Error(`No PDF attachment was downloaded for Gmail message ${messageId}.`);\n  }\n\n  for (const [, attachment] of attachments) {\n    output.push({\n      json: { messageId, filename: attachment.fileName ?? 'invoice.pdf' },\n      binary: { file: attachment },\n      pairedItem: { item: itemIndex }\n    });\n  }\n}\n\nreturn output;"
+      },
+      "id": "98267580-827e-4eaf-85bc-5f8ee38efbc0",
+      "name": "Prepare PDF uploads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-RENDER-SERVICE.onrender.com/api/v1/automation/invoices",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5027d275-5ed1-4f26-b4b2-98ff14461153",
+      "name": "Upload invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "markAsRead",
+        "messageId": "={{ $('Prepare PDF uploads').item.json.messageId }}"
+      },
+      "id": "d35fc686-4f59-44d0-81e8-f0b4055b2ca2",
+      "name": "Mark email as read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        940,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare PDF uploads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare PDF uploads": {
+      "main": [
+        [
+          {
+            "node": "Upload invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload invoice": {
+      "main": [
+        [
+          {
+            "node": "Mark email as read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b6a61dd0-38cb-46f8-857a-101dca2f77f8",
+  "tags": []
+}

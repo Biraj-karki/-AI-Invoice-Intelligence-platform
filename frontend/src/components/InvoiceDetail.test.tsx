@@ -50,6 +50,8 @@ function makeInvoice(
     tax_amount: "705.25",
     source_filename: "sample_invoice.pdf",
     stored_path: "storage/uploads/abc123.pdf",
+    duplicate_of_id: null,
+    duplicate_match: null,
     issues: [],
     line_items: [
       {
@@ -311,6 +313,25 @@ describe("InvoiceDetail — resolving a review invoice", () => {
 });
 
 describe("InvoiceDetail — correcting the numbers", () => {
+  it("shows a link to the earlier invoice when a duplicate is flagged", async () => {
+    vi.mocked(getInvoice).mockResolvedValue(
+      makeInvoice({
+        status: "review",
+        duplicate_of_id: 3,
+        duplicate_match: "same_file",
+        issues: ["Possible duplicate detected."],
+      }),
+    );
+
+    render(<InvoiceDetail invoiceId="7" />);
+
+    expect(await screen.findByRole("link", { name: "invoice #3" })).toHaveAttribute(
+      "href",
+      "/invoices/3",
+    );
+    expect(screen.getByText(/identical PDF/)).toBeInTheDocument();
+  });
+
   it("offers Edit fields while the invoice is in review", async () => {
     vi.mocked(getInvoice).mockResolvedValue(
       makeInvoice({ status: "review", issues: [REVIEW_ISSUE] }),

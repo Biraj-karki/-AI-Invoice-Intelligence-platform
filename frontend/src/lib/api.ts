@@ -1,5 +1,7 @@
 import type {
   AuthUser,
+  AutomationTokenResponse,
+  AutomationTokenStatus,
   InvoiceDetail,
   InvoiceFields,
   InvoiceListResponse,
@@ -250,6 +252,22 @@ export function changePassword(
       current_password: currentPassword,
       new_password: newPassword,
     }),
+  });
+}
+
+export function getAutomationTokenStatus(): Promise<AutomationTokenStatus> {
+  return request<AutomationTokenStatus>("/api/v1/auth/automation-token");
+}
+
+export function createAutomationToken(): Promise<AutomationTokenResponse> {
+  return request<AutomationTokenResponse>("/api/v1/auth/automation-token", {
+    method: "POST",
+  });
+}
+
+export function revokeAutomationToken(): Promise<void> {
+  return request<void>("/api/v1/auth/automation-token", {
+    method: "DELETE",
   });
 }
 

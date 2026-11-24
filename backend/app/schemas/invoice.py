@@ -34,6 +34,8 @@ class InvoiceDetailOut(InvoiceSummaryOut):
     tax_amount: Decimal | None = None
     source_filename: str | None = None
     stored_path: str | None = None
+    duplicate_of_id: int | None = None
+    duplicate_match: Literal["same_file", "invoice_details"] | None = None
     issues: list[str] = Field(default_factory=list)
     line_items: list[LineItemOut] = Field(default_factory=list)
 

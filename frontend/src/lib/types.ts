@@ -10,6 +10,14 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface AutomationTokenResponse {
+  automation_token: string;
+}
+
+export interface AutomationTokenStatus {
+  enabled: boolean;
+}
+
 export type InvoiceStatus =
   | "pending"
   | "extracted"
@@ -54,6 +62,8 @@ export interface InvoiceDetail extends InvoiceSummary {
   tax_amount: string | null;
   source_filename: string | null;
   stored_path: string | null;
+  duplicate_of_id: number | null;
+  duplicate_match: "same_file" | "invoice_details" | null;
   /** Data-quality warnings from normalisation, e.g. totals that don't add up. */
   issues: string[];
   line_items: LineItem[];

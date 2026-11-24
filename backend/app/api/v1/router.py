@@ -12,3 +12,4 @@ api_router.include_router(
     # later cannot forget to require a signed-in user.
     dependencies=[Depends(get_current_user)],
 )
+api_router.include_router(invoices.automation_router)

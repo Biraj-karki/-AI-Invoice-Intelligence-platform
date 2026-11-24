@@ -19,6 +19,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    automation_token_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False
     )

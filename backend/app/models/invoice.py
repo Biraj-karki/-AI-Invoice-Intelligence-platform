@@ -2,7 +2,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +23,9 @@ class Invoice(Base):
     """One uploaded invoice document and the header fields extracted from it."""
 
     __tablename__ = "invoices"
+    __table_args__ = (
+        Index("ix_invoices_owner_content_hash", "owner_id", "content_hash"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -21,6 +34,11 @@ class Invoice(Base):
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    duplicate_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoices.id", ondelete="SET NULL")
+    )
+    duplicate_match: Mapped[str | None] = mapped_column(String(32))
 
     vendor_name: Mapped[str | None] = mapped_column(String(255))
     invoice_number: Mapped[str | None] = mapped_column(String(64), index=True)
@@ -40,6 +58,9 @@ class Invoice(Base):
 
     source_filename: Mapped[str | None] = mapped_column(String(255))
     stored_path: Mapped[str | None] = mapped_column(String(512))
+    storage_provider: Mapped[str] = mapped_column(
+        String(32), default="local", server_default="local", nullable=False
+    )
 
     # Data-quality warnings raised during normalisation, for the review screen.
     issues: Mapped[list[str]] = mapped_column(

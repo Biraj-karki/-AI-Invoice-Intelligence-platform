@@ -5,6 +5,7 @@ are defined once and the API layer never touches a secret directly.
 """
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 
 import jwt
 from pwdlib import PasswordHash
@@ -36,6 +37,11 @@ def verify_password(password: str, password_hash: str) -> bool:
     except Exception:
         # A corrupt or foreign hash must read as "wrong password", not a 500.
         return False
+
+
+def hash_automation_token(token: str) -> str:
+    """Hash a high-entropy automation token before it is stored."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def verify_dummy_password(password: str) -> None:

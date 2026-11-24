@@ -154,3 +154,28 @@ def test_an_invoice_without_a_file_still_deletes(db_session, api_client) -> None
 
     assert api_client.delete(f"{COLLECTION}/{invoice.id}").status_code == 204
     assert db_session.get(Invoice, invoice.id) is None
+
+
+def test_deleting_a_cloudinary_invoice_removes_its_asset(
+    db_session, api_client, monkeypatch
+) -> None:
+    public_id = "invoice-pdfs/0123456789abcdef0123456789abcdef.pdf"
+    invoice = Invoice(
+        owner_id=1,
+        stored_path=public_id,
+        storage_provider="cloudinary",
+        status="extracted",
+    )
+    db_session.add(invoice)
+    db_session.commit()
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        pdf_service,
+        "delete_cloudinary_upload",
+        lambda stored_id: deleted.append(stored_id),
+    )
+
+    response = api_client.delete(f"{COLLECTION}/{invoice.id}")
+
+    assert response.status_code == 204
+    assert deleted == [public_id]

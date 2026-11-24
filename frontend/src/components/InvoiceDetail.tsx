@@ -275,6 +275,22 @@ export default function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
                     ))}
                   </ul>
 
+                  {invoice.duplicate_of_id !== null && (
+                    <p className="mt-3 text-[12.5px] text-amber-900/85">
+                      Possible duplicate of{" "}
+                      <Link
+                        href={`/invoices/${invoice.duplicate_of_id}`}
+                        className="font-semibold underline underline-offset-2 hover:text-amber-950"
+                      >
+                        invoice #{invoice.duplicate_of_id}
+                      </Link>
+                      {invoice.duplicate_match === "same_file"
+                        ? " (identical PDF)"
+                        : " (same vendor and invoice number)"}
+                      .
+                    </p>
+                  )}
+
                   {invoice.status === "review" && !editing && (
                     <div className="mt-4 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:flex sm:flex-wrap">
                       <button

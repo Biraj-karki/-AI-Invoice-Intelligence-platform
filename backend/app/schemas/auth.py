@@ -21,6 +21,14 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
 
 
+class AutomationTokenOut(BaseModel):
+    automation_token: str
+
+
+class AutomationTokenStatusOut(BaseModel):
+    enabled: bool
+
+
 class PasswordChangeIn(BaseModel):
     # No length floor on the current password: a short wrong guess must read as
     # "incorrect", not as a 422 that hints at the stored policy.

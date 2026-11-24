@@ -1,10 +1,16 @@
 """The one dependency every protected endpoint uses to identify the caller."""
 
 from fastapi import Depends, HTTPException, status
+from fastapi import Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import TokenError, decode_access_token
+from app.core.security import (
+    TokenError,
+    decode_access_token,
+    hash_automation_token,
+)
 from app.db.session import get_db
 from app.models import User
 
@@ -41,5 +47,33 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise _unauthorized("This account is no longer active.")
+
+    return user
+
+
+def get_automation_user(
+    automation_token: str | None = Header(
+        default=None,
+        alias="X-Automation-Token",
+        description="Per-account token for the invoice upload automation endpoint.",
+    ),
+    db: Session = Depends(get_db),
+) -> User:
+    if automation_token is None or not automation_token.startswith("inv_auto_"):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "A valid automation token is required.",
+        )
+
+    user = db.scalar(
+        select(User).where(
+            User.automation_token_hash == hash_automation_token(automation_token)
+        )
+    )
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "A valid automation token is required.",
+        )
 
     return user

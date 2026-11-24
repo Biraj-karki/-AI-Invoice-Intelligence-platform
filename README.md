@@ -105,6 +105,59 @@ npm run dev
 
 Open <http://localhost:3000>, create the first account, then upload a PDF.
 
+## n8n invoice intake
+
+The account page can create or revoke a dedicated automation token. The token is
+shown once and only its SHA-256 hash is stored. It can upload invoices for that
+account through `POST /api/v1/automation/invoices` using multipart field `file`
+and the `X-Automation-Token` header; it cannot list, edit, or delete invoices.
+
+n8n Cloud needs a publicly reachable HTTPS API URL. The current local setup
+cannot be reached directly by n8n Cloud, so deployment is required before
+activating a cloud workflow. Configure `CLOUDINARY_URL` to store invoice PDFs
+as authenticated assets instead of relying on Render's ephemeral filesystem.
+The API proxies previews after checking invoice ownership and does not expose
+Cloudinary signed URLs. Store Cloudinary credentials and the automation token
+in the hosting provider / n8n credential stores, never in the workflow source.
+
+An importable starter workflow is in
+[`automation/n8n/gmail-invoice-intake.json`](./automation/n8n/gmail-invoice-intake.json).
+It polls unread Gmail messages with PDF attachments, uploads each PDF, then marks
+the message read only after the upload node succeeds. Failed uploads stay unread
+for retry; if an earlier attachment from that message already uploaded, the
+backend's duplicate detection sends it to review on retry.
+
+### Render demo deployment
+
+The root `render.yaml` defines a free Render web service and PostgreSQL database
+in Singapore. Deploy it from Render's Blueprint flow, then enter `GEMINI_API_KEY`
+and `CLOUDINARY_URL` as secrets when prompted. The API's database URL is
+normalized to the installed `psycopg` driver, and database migrations run on
+service start.
+
+For the demo UI, keep the frontend local and set
+`NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to the Render API root URL
+(without `/api/v1`); add `http://localhost:3000` to the Render service's
+`CORS_ORIGINS`. Register your account, create its automation token on the Account
+page, then set `ALLOW_REGISTRATION=false`.
+
+This is a temporary demo setup: Render's free web service sleeps after inactivity
+and its free PostgreSQL database expires after 30 days. It is not suitable for
+reliable, ongoing invoice intake.
+
+### Import the n8n workflow
+
+1. Import the JSON file above into n8n.
+2. Connect your Gmail OAuth2 credential to both Gmail nodes.
+3. In **Upload invoice**, replace the example URL with
+   `https://<your-render-service>.onrender.com/api/v1/automation/invoices`.
+4. Create an HTTP Header Auth credential with header name
+   `X-Automation-Token` and the token created in the app; select it on
+   **Upload invoice**. Do not paste the token into the workflow JSON.
+5. Test with an unread email containing a PDF attachment. Confirm the invoice in
+   the app before activating the workflow. Invoices needing reconciliation or
+   duplicate review are saved in the app's review queue.
+
 ## Configuration
 
 Everything lives in `backend/.env` (see `.env.example` for the full list).
@@ -118,6 +171,7 @@ Everything lives in `backend/.env` (see `.env.example` for the full list).
 | `ALLOW_REGISTRATION` | Set `false` once your account exists so strangers cannot sign up |
 | `CORS_ORIGINS` | Browser origins allowed to call the API |
 | `STORAGE_DIR` | Where uploaded PDFs are kept (default `backend/storage`) |
+| `CLOUDINARY_URL` | Optional locally; required in production for private authenticated PDF storage |
 
 Frontend: `NEXT_PUBLIC_API_BASE_URL` (default `http://127.0.0.1:8000`).
 
@@ -154,7 +208,8 @@ Never edit an applied migration; add a new one.
   PDF's text layer, so a photo of a paper bill has nothing to extract (OCR is
   the next step for that).
 - Upload is **one PDF at a time**.
-- **No duplicate detection** — uploading the same invoice twice counts it twice.
+- Duplicate uploads are matched per account by identical PDF content or by the
+  same vendor and invoice number. Matches are saved in the review queue with a
+  link to the earlier invoice, so a person can decide whether to approve them.
 - Invoices have no paid/unpaid state yet.
-- Files are stored on local disk; a host with an ephemeral disk needs object
-  storage before deploying.
+- Local development uses local disk unless `CLOUDINARY_URL` is configured.
