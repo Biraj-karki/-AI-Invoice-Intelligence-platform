@@ -129,17 +129,17 @@ backend's duplicate detection sends it to review on retry.
 
 ### Render demo deployment
 
-The root `render.yaml` defines a free Render web service and PostgreSQL database
-in Singapore. Deploy it from Render's Blueprint flow, then enter `GEMINI_API_KEY`
-and `CLOUDINARY_URL` as secrets when prompted. The API's database URL is
-normalized to the installed `psycopg` driver, and database migrations run on
-service start.
+The root `render.yaml` defines a free Render API service, Next.js frontend, and
+PostgreSQL database in Singapore. Deploy them together from Render's Blueprint
+flow, then enter `GEMINI_API_KEY` and `CLOUDINARY_URL` as secrets when prompted.
+The API's database URL is normalized to the installed `psycopg` driver, and
+database migrations run on service start. The frontend is configured to call
+`https://ai-invoice-demo-api.onrender.com`; the API allows the frontend's Render
+origin through CORS.
 
-For the demo UI, keep the frontend local and set
-`NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to the Render API root URL
-(without `/api/v1`); add `http://localhost:3000` to the Render service's
-`CORS_ORIGINS`. Register your account, create its automation token on the Account
-page, then set `ALLOW_REGISTRATION=false`.
+After both services are live, open the frontend URL shown by Render and register
+your account. Create its automation token on the Account page, then set
+`ALLOW_REGISTRATION=false` in the API service's environment.
 
 This is a temporary demo setup: Render's free web service sleeps after inactivity
 and its free PostgreSQL database expires after 30 days. It is not suitable for
